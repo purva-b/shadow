@@ -150,10 +150,8 @@ a:hover{text-decoration:underline}
 .thinking{display:flex;flex-direction:column;gap:8px}
 .thinking-head{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--muted)}
 
-/* animated 'Shadow is thinking' */
-.thinking-live{display:flex;align-items:center;gap:14px;padding:18px 20px;
-  background:linear-gradient(100deg,var(--accent-tint),var(--teal-tint));
-  border:1px solid var(--line);border-radius:var(--r-card);max-width:560px}
+/* animated 'Shadow is thinking' — no box, just mark + text */
+.thinking-live{display:flex;align-items:center;gap:12px;padding:6px 2px;max-width:560px}
 .think-orb{position:relative;display:grid;place-items:center;width:44px;height:44px;flex:none}
 .think-orb::before{content:"";position:absolute;inset:-4px;border-radius:50%;
   background:radial-gradient(circle,var(--accent-soft),transparent 70%);

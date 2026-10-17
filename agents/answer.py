@@ -46,10 +46,10 @@ def _people_cards() -> list[dict]:
     out = []
     if not folder:
         return out
-    for it in T.folder_items(folder):
+    for it in T.folder_items(folder, md_template="shadowPerson"):
         if it.get("type") != "file":
             continue
-        md = T.get_metadata(it["id"], "shadowPerson")
+        md = _md_from_listing(it, "shadowPerson")
         if not md:
             continue
         card = {k: v for k, v in md.items() if not k.startswith("$")}
@@ -114,10 +114,20 @@ _SCAN_FOLDERS = ["Sources/Issues", "Sources/PRs", "Sources/Docs",
                  "Sources/Meetings", "Sources/Slack", "Sources/Org"]
 
 
+def _md_from_listing(entry: dict, template: str = "shadowItem") -> dict:
+    """Read a template's metadata from an inline folder_items entry WITHOUT a
+    second HTTP call. folder_items already requests fields=...,metadata, so the
+    values ride along under metadata[enterprise_<id>][template]."""
+    md = entry.get("metadata") or {}
+    scoped = md.get(enterprise_scope()) or {}
+    inst = scoped.get(template) or {}
+    return {k: v for k, v in inst.items() if not k.startswith("$")}
+
+
 def _scan_items_by_component(components: list[str], user_id: str) -> dict[str, dict]:
     """Enumerate source subfolders AS the user and keep files whose shadowItem
-    components intersect the wanted set. Robust against multiSelect query gaps
-    and naturally permission-filtered (restricted files aren't listable)."""
+    components intersect the wanted set. Uses inline metadata from the listing
+    (no per-file fetch) — this is the hot path, so it must stay cheap."""
     folders = ids()["folders"]
     want = set(components)
     found: dict[str, dict] = {}
@@ -126,16 +136,16 @@ def _scan_items_by_component(components: list[str], user_id: str) -> dict[str, d
         if not fid:
             continue
         try:
-            listing = T.folder_items(fid, as_user=user_id)
+            listing = T.folder_items(fid, as_user=user_id, md_template="shadowItem")
         except Exception:
             continue
         for it in listing:
             if it.get("type") != "file":
                 continue
-            md = T.get_metadata(it["id"], "shadowItem", as_user=user_id) or {}
+            md = _md_from_listing(it) or T.get_metadata(it["id"], "shadowItem", as_user=user_id) or {}
             comps = set(md.get("components", []) or [])
             if comps & want:
-                found[it["id"]] = {"id": it["id"], "name": it["name"]}
+                found[it["id"]] = {"id": it["id"], "name": it["name"], "_md": md}
     return found
 
 
@@ -216,7 +226,7 @@ def _build_citations(items: list[dict], user_id: str, limit: int = 5) -> list[di
     cits = []
     for r in items[:limit]:
         fid = r["id"]
-        md = unwrap_metadata(r, "shadowItem")
+        md = r.get("_md") or unwrap_metadata(r, "shadowItem")
         if not md.get("summary"):  # query rows carry no fields; fetch directly
             fetched = T.get_metadata(fid, "shadowItem", as_user=user_id) or {}
             md = {k: v for k, v in fetched.items() if not k.startswith("$")}
@@ -456,7 +466,7 @@ def _answer_pipeline(user_id: str, question: str,
     want_comps = set(components or [])
     ranked = []
     for r in items:
-        md = T.get_metadata(r["id"], "shadowItem", as_user=user_id) or {}
+        md = r.get("_md") or T.get_metadata(r["id"], "shadowItem", as_user=user_id) or {}
         comps = set(md.get("components", []) or [])
         hay = f"{(md.get('title') or '')} {(md.get('summary') or '')} {(md.get('issueIds') or '')}".lower()
         rel = 0
@@ -533,7 +543,7 @@ def _answer_pipeline(user_id: str, question: str,
     for c in cits:
         all_people.update(p.strip() for p in (c.get("_people", "") or "").split(","))
     for r in items:
-        md = T.get_metadata(r["id"], "shadowItem", as_user=user_id) or {}
+        md = r.get("_md") or T.get_metadata(r["id"], "shadowItem", as_user=user_id) or {}
         all_people.update(p.strip() for p in (md.get("people", "") or "").split(","))
     cited_people = ",".join(p for p in all_people if p)
     who = _who_to_ask(components, cards, org, cited_people)

@@ -93,8 +93,14 @@ def create_folder(name: str, parent_id: str) -> str:
     return folder.id
 
 
-def folder_items(folder_id: str, as_user: str | None = None) -> list[dict]:
-    url = f"{API}/folders/{folder_id}/items?fields=id,name,type,metadata&limit=1000"
+def folder_items(folder_id: str, as_user: str | None = None,
+                 md_template: str | None = None) -> list[dict]:
+    fields = "id,name,type"
+    if md_template:
+        eid = os.environ.get("BOX_ENTERPRISE_ID", "")
+        scope = f"enterprise_{eid}" if eid else "enterprise"
+        fields += f",metadata.{scope}.{md_template}"
+    url = f"{API}/folders/{folder_id}/items?fields={fields}&limit=1000"
     r = requests.get(url, headers=_headers(as_user), timeout=30)
     r.raise_for_status()
     return r.json().get("entries", [])

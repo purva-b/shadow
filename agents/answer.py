@@ -306,38 +306,53 @@ def _compose_markdown(question: str, cits: list[dict], decision: dict | None,
                       who: dict | None, box_ai_answer: str = "") -> str:
     if box_ai_answer:
         return box_ai_answer
-    # Bedrock compose from metadata summaries
-    bullets = "\n".join(
-        f"- [{i+1}] {c['name']} ({_source_type_name(c['source_type'])}, {c['date']}): {c['_summary']}"
-        for i, c in enumerate(cits)
-    )
+
     dstr = ""
     if decision:
-        dstr = (f"\nDecision on record: \"{decision['decision']}\" — status "
-                f"{decision['status']}"
-                + (" (awaiting confirmation)" if decision.get("confirmed") == "pending" else "")
-                + f", decided {decision['decidedOn']}.")
-    prompt = (
-        f"A new teammate asks: \"{question}\"\n\n"
-        f"Using ONLY these cited team sources, write a short, friendly answer "
-        f"(2-4 short paragraphs or bullets). Keep the [n] citation markers that "
-        f"match the sources. Say where it was discussed and the decision status. "
-        f"Do not invent anything.\n\nSources:\n{bullets}\n{dstr}\n"
-    )
-    try:
-        md = bedrock_complete(prompt, max_tokens=600)
-        if md:
-            return md
-    except Exception:
-        pass
-    # deterministic fallback (no Bedrock)
-    lines = [f"Here's what the team has on this:\n"]
-    for i, c in enumerate(cits):
-        lines.append(f"- [{i+1}] {c['_summary']} "
-                     f"({_source_type_name(c['source_type'])}, {c['date']})")
+        dstr = (f"The team's recorded decision: **{decision['decision']}** — "
+                f"status **{decision['status']}**"
+                + (" (awaiting confirmation)" if decision.get("confirmed") == "pending"
+                   else "")
+                + (f", decided {decision['decidedOn']}" if decision.get("decidedOn") else "")
+                + ".")
+
+    # Bedrock compose is only used in Box-AI / rich mode (it adds latency).
+    if os.environ.get("SHADOW_BOX_AI", "").lower() in ("1", "true", "yes"):
+        bullets = "\n".join(
+            f"- [{i+1}] {c['name']} ({_source_type_name(c['source_type'])}, {c['date']}): {c['_summary']}"
+            for i, c in enumerate(cits)
+        )
+        prompt = (
+            f"A new teammate asks: \"{question}\"\n\n"
+            f"Using ONLY these cited team sources, write a short, friendly answer "
+            f"(2-4 short paragraphs or bullets). Keep the [n] citation markers that "
+            f"match the sources. Say where it was discussed and the decision status. "
+            f"Do not invent anything.\n\nSources:\n{bullets}\n{dstr}\n"
+        )
+        try:
+            md = bedrock_complete(prompt, max_tokens=600)
+            if md:
+                return md
+        except Exception:
+            pass
+
+    # Fast deterministic answer (default) — reads as prose, still cited.
+    parts = []
+    if cits:
+        lead = cits[0]
+        parts.append(f"Here's what the team has on this. {lead['_summary']} [1]")
+        if len(cits) > 1:
+            parts.append("It also comes up in:")
+            parts.append("\n".join(
+                f"- [{i+1}] {c['_summary']} "
+                f"({_source_type_name(c['source_type'])}, {c['date']})"
+                for i, c in enumerate(cits[1:], start=1)))
     if dstr:
-        lines.append(dstr.strip())
-    return "\n".join(lines)
+        parts.append(dstr)
+    if who and who.get("name"):
+        parts.append(f"**Who to ask:** {who['name']} — {who.get('reason','')}"
+                     + (f" {who['moved_note']}" if who.get("moved_note") else ""))
+    return "\n\n".join(parts) if parts else "I don't have team sources on that yet."
 
 
 # --------------------------------------------------------------------------- #
@@ -481,17 +496,21 @@ def _answer_pipeline(user_id: str, question: str) -> dict[str, Any]:
     decisions = _decisions(components, user_id)
     decision = _decision_status(decisions)
 
-    # Box AI Ask over readable files (prose + citations), degrade on error
+    # Box AI Ask over readable files (prose + citations). It's the slow step
+    # (5-30s), so it's OFF by default for a snappy demo and the deterministic
+    # metadata summary is used instead (still cited). Flip SHADOW_BOX_AI=1 to
+    # show real Box AI prose.
     box_ai_answer = ""
-    readable_ids = [c["file_id"] for c in cits if T.can_read(c["file_id"], user_id)]
-    if readable_ids:
-        ai = T.ai_ask(readable_ids, question, as_user=user_id)
-        if ai.get("answer") and not ai.get("error"):
-            box_ai_answer = ai["answer"]
-            log_activity("Answer", "Box AI Ask answered", "", f"{len(readable_ids)} files")
-        else:
-            log_activity("Answer", "Box AI unavailable, degraded to metadata", "",
-                         str(ai.get("status", "")))
+    if os.environ.get("SHADOW_BOX_AI", "").lower() in ("1", "true", "yes"):
+        readable_ids = [c["file_id"] for c in cits if T.can_read(c["file_id"], user_id)]
+        if readable_ids:
+            ai = T.ai_ask(readable_ids, question, as_user=user_id)
+            if ai.get("answer") and not ai.get("error"):
+                box_ai_answer = ai["answer"]
+                log_activity("Answer", "Box AI Ask answered", "", f"{len(readable_ids)} files")
+            else:
+                log_activity("Answer", "Box AI unavailable, degraded to metadata", "",
+                             str(ai.get("status", "")))
 
     # people across ALL matched items (so a cited author who moved is noticed
     # even when the doc is not in the top-5 shown)

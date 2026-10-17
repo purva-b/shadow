@@ -84,19 +84,21 @@ export default function App() {
     setDraft("");
 
     let convId = activeId;
+    let context: string[] = [];
     if (!convId || !active) {
       convId = "c" + (++_cid);
       const conv: Conversation = { id: convId, title: q, turns: [{ question: q, answer: null }] };
       setConvos((cs) => [conv, ...cs]);
       setActiveId(convId);
     } else {
+      context = active.turns.map((t) => t.question);  // prior questions = topic context
       setConvos((cs) => cs.map((c) =>
         c.id === convId ? { ...c, turns: [...c.turns, { question: q, answer: null }] } : c));
     }
 
     setLoading(true);
     try {
-      const ans: Answer = await api.ask(actingAs.user_id, q);
+      const ans: Answer = await api.ask(actingAs.user_id, q, context);
       setConvos((cs) => cs.map((c) => {
         if (c.id !== convId) return c;
         const turns = [...c.turns];

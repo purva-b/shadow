@@ -114,14 +114,18 @@ async def ask(req: Request):
     body = await req.json()
     user_id = str(body.get("user_id") or _uid(_state["acting_as"]))
     question = (body.get("question") or "").strip()
-    key = (user_id, question.lower())
+    context = body.get("context") or []  # prior questions in this conversation
+    if not isinstance(context, list):
+        context = []
+    ctx_key = "|".join(str(c).lower() for c in context)
+    key = (user_id, question.lower(), ctx_key)
     if DEMO_CACHE and key in _ask_cache:
         return _ask_cache[key]
     answer_mod, _ = _agents()
     if answer_mod is None:
         return JSONResponse(_stub_answer(question), status_code=200)
     try:
-        result = answer_mod.answer(user_id, question)
+        result = answer_mod.answer(user_id, question, context=context)
     except Exception as e:  # pragma: no cover
         result = _stub_answer(question, error=str(e))
     if DEMO_CACHE:

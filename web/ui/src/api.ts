@@ -21,8 +21,8 @@ export const api = {
   actingAs: () => get<ActingAs>("/api/acting-as"),
   setActingAs: (user: string) => post<ActingAs>("/api/acting-as", { user }),
   sources: () => get<Sources>("/api/sources"),
-  ask: (user_id: string, question: string) =>
-    post<Answer>("/api/ask", { user_id, question }),
+  ask: (user_id: string, question: string, context: string[] = []) =>
+    post<Answer>("/api/ask", { user_id, question, context }),
   ingest: () => post<{ ok: boolean; steps?: unknown; error?: string }>("/api/ingest", {}),
   confirmTask: () =>
     post<{ ok: boolean; closed?: number; error?: string }>("/api/simulate/confirm-task", {}),

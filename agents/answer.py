@@ -377,14 +377,16 @@ ANSWER_SYSTEM = (
 )
 
 
-def answer(user_id: str, question: str) -> dict[str, Any]:
+def answer(user_id: str, question: str, context: list | None = None) -> dict[str, Any]:
     """Fully-agentic answer: a Strands Agent orchestrates the tool calls. The
     structured fields come from the deterministic pipeline (same tools, reliable
     shape) so the UI contract holds; if the agent is unavailable we return the
-    pipeline result directly."""
+    pipeline result directly. `context` is the list of prior questions in this
+    conversation, used so a follow-up ('show me the design doc') inherits the
+    topic (e.g. PAY-482) of the question it follows."""
     user_id = str(user_id)
     # structured fields + guaranteed-correct result (also the fallback)
-    base = _answer_pipeline(user_id, question)
+    base = _answer_pipeline(user_id, question, context=context or [])
     # The Strands tool-calling loop is real but slower (~60-90s); gate it behind
     # SHADOW_AGENTIC so the live demo stays snappy while "fully agentic" is a
     # flip of one env var. Pipeline prose already routes through Strands too.
@@ -408,10 +410,23 @@ def answer(user_id: str, question: str) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------- #
-def _answer_pipeline(user_id: str, question: str) -> dict[str, Any]:
+def _answer_pipeline(user_id: str, question: str,
+                     context: list | None = None) -> dict[str, Any]:
     user_id = str(user_id)
+    context = context or []
     issue_ids = [m.group(0).upper() for m in ISSUE_RE.finditer(question)]
     components = _components_from(question)
+
+    # Follow-up resolution: if this question names no issue/component of its own
+    # (e.g. "show me the design doc", "who should I ask about this?"), inherit
+    # the topic from the conversation's prior questions so it stays on-subject.
+    if not issue_ids and not components and context:
+        ctx_text = " ".join(str(c) for c in context)
+        issue_ids = [m.group(0).upper() for m in ISSUE_RE.finditer(ctx_text)]
+        components = _components_from(ctx_text)
+        # fold the context into the question so Box AI / compose see the topic
+        if issue_ids or components:
+            question = f"{question} (about {ctx_text})"
 
     # privacy signal: a Restricted source on the topic the asker cannot read.
     # This does NOT short-circuit — we first gather what the asker CAN read, then

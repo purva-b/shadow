@@ -502,6 +502,22 @@ def _answer_pipeline(user_id: str, question: str,
             "restricted_note": note,
         }
 
+    # NO-MATCH decline: nothing the asker can read matched this topic. Say so
+    # plainly — never fall through to an unrelated decision / who-to-ask. This
+    # also covers HR-quarantined topics (1:1s) and out-of-scope questions.
+    if not cits:
+        note = ("I don't have anything on that in the team's memory — it may be "
+                "outside what I've shadowed, or in a space your Box access doesn't "
+                "include. Try rephrasing, or ask your manager Dana Kim.")
+        log_activity("Answer", f"No readable match for user {user_id}", "", "no-match")
+        return {
+            "answer_markdown": note,
+            "citations": [],
+            "decision_status": None,
+            "who_to_ask": None,
+            "restricted_note": None,
+        }
+
     if not components:
         # infer components: the TOP citation (the issue / most relevant source)
         # defines the primary components; others are appended as secondary.

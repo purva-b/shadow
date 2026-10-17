@@ -71,3 +71,13 @@ export interface QItem {
   text: string;
   answer: Answer | null;
 }
+
+export interface Turn {
+  question: string;
+  answer: Answer | null;   // null while loading
+}
+export interface Conversation {
+  id: string;
+  title: string;
+  turns: Turn[];
+}

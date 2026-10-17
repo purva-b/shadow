@@ -1,28 +1,47 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Answer, Citation } from "./types";
 import { api } from "./api";
 import { Chip, Icon, ICONS, ShadowMark, initials, renderMarkdown, srcIcon } from "./ui";
 
-const STEPS = ["Searching team memory", "Checking what you can access",
-  "Reading sources", "Finding who to ask"];
+const THINK_PHRASES = [
+  "Shadow is casting around for answers…",
+  "Shadow is lurking in the archives…",
+  "Shadow is following the trail…",
+  "Shadow is digging through the shade…",
+  "Shadow is shedding some light…",
+  "Shadow is stepping out of the dark…",
+  "Shadow is peeking behind the scenes…",
+  "Shadow is tracing the outline…",
+  "Shadow is never far behind…",
+  "Shadow is sneaking a peek at the notes…",
+  "Shadow is tiptoeing through the team's history…",
+  "Shadow is lengthening as it learns…",
+];
+
+function shuffled<T>(a: T[]): T[] {
+  const r = [...a];
+  for (let i = r.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [r[i], r[j]] = [r[j], r[i]];
+  }
+  return r;
+}
 
 export function Thinking({ question }: { question: string }) {
-  const [done, setDone] = useState(0);
+  const phrases = useMemo(() => shuffled(THINK_PHRASES), [question]);
+  const [i, setI] = useState(0);
   useEffect(() => {
-    const timers = STEPS.map((_, i) =>
-      setTimeout(() => setDone((d) => Math.max(d, i + 1)), 300 + i * 450));
-    return () => timers.forEach(clearTimeout);
-  }, [question]);
+    const t = setInterval(() => setI((n) => (n + 1) % phrases.length), 1600);
+    return () => clearInterval(t);
+  }, [phrases]);
   return (
     <div className="answer-layout"><div className="conversation">
       <div className="q-bubble">{question}</div>
-      <div className="thinking">
-        <div className="thinking-head"><ShadowMark size={24} />Shadow is thinking…</div>
-        {STEPS.map((s, i) => (
-          <div key={i} className={"tstep" + (i < done ? " done" : "")}>
-            <span className="tick" />{s}
-          </div>
-        ))}
+      <div className="thinking-live">
+        <span className="think-orb"><ShadowMark size={26} /></span>
+        <div className="think-text">
+          <div className="think-step" key={i}>{phrases[i]}</div>
+        </div>
       </div>
     </div></div>
   );

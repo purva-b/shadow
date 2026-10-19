@@ -72,13 +72,22 @@ def recall(question: str, principal: str, store, context: list | None = None,
 
     qvec = embeddings.embed(text) if embeddings.available() else None
 
+    # Relevance floors so an OFF-TOPIC question returns nothing rather than the
+    # least-irrelevant record. Semantic cosine is never exactly 0, so a bare
+    # ">0" gate would admit everything; require a real similarity / keyword hit.
+    SEM_FLOOR = 0.35      # cosine below this is "not about the same thing"
     scored = []
     for r in candidates:
         kw = _keyword_score(r, qwords, issue_ids, components)
         sem = _semantic_score(qvec, r)
+        # a record qualifies only if it has an exact/keyword hit OR clears the
+        # semantic floor; otherwise it is not on-topic at all.
+        relevant = kw > 0 or sem >= SEM_FLOOR
+        if not relevant:
+            continue
         # exact issue-id boost (kw>=50) must win; otherwise semantic leads,
         # scaled to the same order of magnitude as the component/keyword lane.
-        blended = kw + sem * 20.0
+        blended = kw + (sem if sem >= SEM_FLOOR else 0.0) * 20.0
         if blended > 0:
             scored.append((blended, r))
     scored.sort(key=lambda x: x[0], reverse=True)

@@ -49,6 +49,15 @@ SWITCHABLE = ["Alex Rivera", "Priya Nair", "Dana Kim"]
 
 app = FastAPI(title="Shadow")
 
+# register source-specific hooks (e.g. Box live can_read probe for restricted
+# Box records routed through the connector store)
+try:
+    from core import wiring as _wiring
+
+    _wiring.install()
+except Exception as _e:  # never block startup on wiring
+    print("core wiring skipped:", _e)
+
 _state = {"acting_as": "Alex Rivera"}
 
 

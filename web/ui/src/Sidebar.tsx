@@ -96,6 +96,8 @@ export function Sidebar({
             "Pull PRs/issues from the configured repo (needs GITHUB_TOKEN + GITHUB_REPO)")}
           {connectorRow("slack", ICONS.slack, "Slack (live)",
             "Pull channel threads from Slack (needs SLACK_BOT_TOKEN)")}
+          {connectorRow("confluence", ICONS.doc, "Confluence (wiki)",
+            "Pull pages from Confluence (needs CONFLUENCE_BASE_URL + API token)")}
           {syncMsg && <li className="sync-msg">{syncMsg}</li>}
         </ul>
       </div>

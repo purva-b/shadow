@@ -168,16 +168,73 @@ def _principal_for(user_id: str) -> str:
 
 
 @app.post("/api/sync/{connector}")
-async def sync_connector(connector: str):
+async def sync_connector(connector: str, limit: int = 50):
     """Pull a connector's records into the store so Shadow can answer across it.
-    e.g. POST /api/sync/github  (needs GITHUB_TOKEN + GITHUB_REPO in env)."""
+    e.g. POST /api/sync/github  (needs GITHUB_TOKEN + GITHUB_REPO in env).
+    Pass ?limit=N to raise the per-sync cap (default 50)."""
     try:
         from core.sync import sync
 
         # Box needs its folder-id map to enumerate the corpus; other connectors
         # read their config from env.
         kwargs = {"folders": FOLDERS} if connector == "box" else {}
-        return sync(connector, **kwargs)
+        return sync(connector, limit=limit, **kwargs)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/webhook/{connector}")
+async def webhook(connector: str, req: Request):
+    """Receive a push event from a connector's origin system, verify it, fetch
+    the changed item, and ingest it live. Each connector declares its webhook
+    contract (path, signature header, secret env) via subscribe(). This makes
+    proactive-on-real-events real instead of poll-only.
+
+    Payload shape is connector-specific; we only need enough to build a
+    SourceRef (an external id / hint), then the connector's own fetch()
+    normalizes it. Signature verification runs when the secret env is set.
+    """
+    import hashlib
+    import hmac
+    import os as _os
+
+    raw = await req.body()
+    try:
+        import connectors as _conns
+        from core import ingest as _core_ingest
+        from core.store import store as _store
+
+        if connector not in _conns.available():
+            return {"ok": False, "error": f"unknown connector {connector!r}"}
+        kwargs = {"folders": FOLDERS} if connector == "box" else {}
+        conn = _conns.load(connector, **kwargs)
+        spec = conn.subscribe()
+
+        # verify the signature when the connector declares one and the secret
+        # is configured (otherwise accept — dev/local).
+        if spec and spec.verify_header and spec.secret_env:
+            secret = _os.environ.get(spec.secret_env, "")
+            sig = req.headers.get(spec.verify_header, "")
+            if secret:
+                mac = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+                if not (sig and hmac.compare_digest(mac, sig.split("=")[-1])):
+                    return JSONResponse({"ok": False, "error": "bad signature"},
+                                        status_code=401)
+
+        body = await req.json() if raw else {}
+        # Build a SourceRef from the payload. Connectors expose an id in common
+        # fields; fall back to a generic 'id'. The connector's fetch does the rest.
+        from connectors.base import SourceRef
+
+        ext_id = str(body.get("external_id") or body.get("id")
+                     or (body.get("resource") or {}).get("id") or "")
+        if not ext_id:
+            return {"ok": False, "error": "no item id in payload"}
+        ref = SourceRef(source=connector, external_id=ext_id, hint=body.get("hint", {}))
+        record = conn.fetch(ref)
+        result = _core_ingest.ingest_record(record, store=_store)
+        return {"ok": True, "connector": connector, "ingested": ext_id,
+                "notifications": result.get("notifications", [])}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 

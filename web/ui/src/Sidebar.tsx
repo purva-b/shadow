@@ -1,15 +1,35 @@
+import { useState } from "react";
 import type { ActingAs, Sources } from "./types";
+import { api } from "./api";
 import { Icon, ICONS, ShadowMark, initials } from "./ui";
 
 export function Sidebar({
-  view, setView, sources, actingAs, onSwitch,
+  view, setView, sources, actingAs, onSwitch, onSynced,
 }: {
   view: string;
   setView: (v: "ask" | "memory") => void;
   sources: Sources | null;
   actingAs: ActingAs | null;
   onSwitch: (name: string) => void;
+  onSynced?: () => void;
 }) {
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string>("");
+
+  async function syncGithub() {
+    setSyncing(true);
+    setSyncMsg("");
+    try {
+      const r = await api.syncConnector("github");
+      setSyncMsg(r.ok ? `+${r.ingested ?? 0} synced` : (r.error || "sync failed"));
+      onSynced?.();
+    } catch (e) {
+      setSyncMsg("sync failed");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   const navItem = (id: "ask" | "memory", icon: string, label: string) => (
     <button
       className={"nav-item" + (view === id ? " active" : "")}
@@ -54,6 +74,20 @@ export function Sidebar({
           {row(ICONS.slack, "Slack channels", sources?.slack ?? "—")}
           {row(ICONS.issue, "Issues and PRs", sources?.issues_prs ?? "—")}
           {row(ICONS.doc, "Docs in Box", sources?.docs ?? "—")}
+          <li className="connector-row">
+            <Icon d={ICONS.github} sm />
+            <span>GitHub (PRs/issues)</span>
+            <em>{sources?.connectors?.github ?? 0}</em>
+            <button
+              className="sync-btn"
+              onClick={syncGithub}
+              disabled={syncing}
+              title="Pull PRs/issues from the configured repo (needs GITHUB_TOKEN + GITHUB_REPO)"
+            >
+              {syncing ? "Syncing…" : "Sync"}
+            </button>
+          </li>
+          {syncMsg && <li className="sync-msg">{syncMsg}</li>}
         </ul>
       </div>
 

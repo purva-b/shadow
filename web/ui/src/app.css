@@ -77,6 +77,15 @@ a:hover{text-decoration:underline}
 .source-list li:hover{background:var(--panel-2)}
 .source-list li em{margin-left:auto;font-style:normal;font-size:12px;color:var(--muted);
   background:var(--panel-2);border-radius:var(--r-pill);padding:1px 8px;min-width:22px;text-align:center}
+.source-list li.connector-row em{margin-left:auto}
+.sync-btn{margin-left:8px;font-size:11.5px;font-weight:600;letter-spacing:.02em;
+  padding:3px 10px;border-radius:var(--r-pill);border:1px solid var(--accent-soft);
+  background:var(--accent-tint);color:var(--accent-dark);cursor:pointer;transition:background .14s,border-color .14s}
+.sync-btn:hover:not(:disabled){background:var(--accent-soft)}
+.sync-btn:disabled{opacity:.6;cursor:default}
+.source-list li.sync-msg{font-size:11.5px;color:var(--coral);background:var(--coral-tint);
+  padding:4px 12px;border-radius:var(--r-nav);justify-content:flex-start}
+.source-list li.sync-msg:hover{background:var(--coral-tint)}
 .sidebar-bottom{margin-top:auto}
 .acting-label{display:block;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:0 6px 6px}
 .acting-select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-input);

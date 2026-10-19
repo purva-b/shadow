@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from connectors.base import SourceRecord
 
-from . import acl
+from . import acl, embeddings
 
 ISSUE_RE = re.compile(r"\b[A-Z][A-Z0-9]+-\d+\b")
 
@@ -27,8 +27,8 @@ class Retrieved:
     withheld: list[SourceRecord]
 
 
-def _score(record: SourceRecord, qwords: set[str], issue_ids: set[str],
-           components: set[str]) -> int:
+def _keyword_score(record: SourceRecord, qwords: set[str], issue_ids: set[str],
+                   components: set[str]) -> int:
     """Higher = more relevant. Exact issue-id match dominates, then component
     overlap, then keyword overlap on title+body."""
     s = 0
@@ -42,20 +42,45 @@ def _score(record: SourceRecord, qwords: set[str], issue_ids: set[str],
     return s
 
 
+def _semantic_score(qvec, record: SourceRecord) -> float:
+    """Cosine similarity between the question and the record's title+body.
+    0.0 when embeddings are unavailable, so the keyword lane carries it."""
+    if qvec is None:
+        return 0.0
+    rvec = embeddings.embed(f"{record.title}\n{record.body}")
+    return embeddings.cosine(qvec, rvec) if rvec else 0.0
+
+
 def recall(question: str, principal: str, store, context: list | None = None,
            limit: int = 5, sources: list[str] | None = None) -> Retrieved:
-    """Recall + ACL-filter records for `question` asked by `principal`."""
+    """Recall + ACL-filter records for `question` asked by `principal`.
+
+    Ranking blends an exact-match boost (issue-id, component) with SEMANTIC
+    similarity (Titan embeddings). Exact issue-id still dominates; semantic
+    similarity replaces the brittle keyword count so 'gateway vendor pricing'
+    ranks the pricing PR above a checkout PR that merely contains 'gateway'.
+    Falls back to pure keyword scoring when embeddings are unavailable.
+    """
     text = question + " " + " ".join(str(c) for c in (context or []))
     issue_ids = {m.group(0).upper() for m in ISSUE_RE.finditer(text)}
     qwords = {w for w in re.findall(r"[a-z]{4,}", text.lower())}
-    components = {w for w in qwords}   # component tags are plain words; intersect in _score
+    components = {w for w in qwords}
 
     candidates = store.all()
     if sources:
         candidates = [r for r in candidates if r.source in sources]
 
-    scored = [(_score(r, qwords, issue_ids, components), r) for r in candidates]
-    scored = [(s, r) for s, r in scored if s > 0]
+    qvec = embeddings.embed(text) if embeddings.available() else None
+
+    scored = []
+    for r in candidates:
+        kw = _keyword_score(r, qwords, issue_ids, components)
+        sem = _semantic_score(qvec, r)
+        # exact issue-id boost (kw>=50) must win; otherwise semantic leads,
+        # scaled to the same order of magnitude as the component/keyword lane.
+        blended = kw + sem * 20.0
+        if blended > 0:
+            scored.append((blended, r))
     scored.sort(key=lambda x: x[0], reverse=True)
     top = [r for _, r in scored[: limit * 3]]   # over-recall, ACL will trim
 

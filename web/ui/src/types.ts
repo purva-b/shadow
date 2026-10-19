@@ -47,6 +47,7 @@ export interface Sources {
   issues_prs: number;
   docs: number;
   live: boolean;
+  connectors?: Record<string, number>;
 }
 
 export interface ActivityRow {

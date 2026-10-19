@@ -116,7 +116,7 @@ export default function App() {
 
   return (
     <main className="app">
-      <Sidebar view={view} setView={setView} sources={sources} actingAs={actingAs} onSwitch={onSwitch} />
+      <Sidebar view={view} setView={setView} sources={sources} actingAs={actingAs} onSwitch={onSwitch} onSynced={() => api.sources().then(setSources).catch(() => {})} />
 
       <section className="panel questions" aria-label="Your conversations">
         <div className="q-header">

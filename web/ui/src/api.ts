@@ -24,6 +24,9 @@ export const api = {
   ask: (user_id: string, question: string, context: string[] = []) =>
     post<Answer>("/api/ask", { user_id, question, context }),
   ingest: () => post<{ ok: boolean; steps?: unknown; error?: string }>("/api/ingest", {}),
+  syncConnector: (name: string) =>
+    post<{ ok: boolean; ingested?: number; store_total?: number; error?: string }>(
+      "/api/sync/" + encodeURIComponent(name), {}),
   confirmTask: () =>
     post<{ ok: boolean; closed?: number; error?: string }>("/api/simulate/confirm-task", {}),
   activity: () => get<{ rows: ActivityRow[] }>("/api/activity"),

@@ -40,8 +40,17 @@ def _components_from(question: str) -> list[str]:
     return found
 
 
+_PC_CACHE = {"t": 0.0, "v": None}
+
+
 def _people_cards() -> list[dict]:
-    """All shadowPerson cards (service account view), read from the People folder."""
+    """All shadowPerson cards (service account view), read from the People folder.
+    Cached for 60s — the people graph rarely changes within a session, and this
+    is on the hot answer path."""
+    import time as _time
+
+    if _PC_CACHE["v"] is not None and (_time.time() - _PC_CACHE["t"]) < 60:
+        return _PC_CACHE["v"]
     folder = ids()["folders"].get("Memory/People")
     out = []
     if not folder:
@@ -56,6 +65,8 @@ def _people_cards() -> list[dict]:
         card["_file_id"] = it["id"]
         card["_name"] = card.get("name")
         out.append(card)
+    _PC_CACHE["t"] = _time.time()
+    _PC_CACHE["v"] = out
     return out
 
 

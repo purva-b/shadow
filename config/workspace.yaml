@@ -1,0 +1,28 @@
+workspace:
+  name: "Payments"
+  canonical_domain: "payments.example"
+
+components:
+  - retry-service
+  - payments-api
+  - ledger
+  - gateway-client
+  - checkout
+
+enabled_connectors:
+  - box
+  - github
+
+identities:
+  - canonical: priya@payments.example
+    github: pnair
+    aliases: ["Priya Nair", "Priya"]
+  - canonical: dana@payments.example
+    github: dkim
+    aliases: ["Dana Kim", "Dana"]
+  - canonical: alex@payments.example
+    github: arivera
+    aliases: ["Alex Rivera", "Alex"]
+  - canonical: sam@payments.example
+    github: sortiz
+    aliases: ["Sam Ortiz", "Sam"]

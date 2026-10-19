@@ -98,12 +98,21 @@ def sources():
             return 0
     issues = count("Sources/Issues") + count("Sources/PRs")
     live = bool(os.environ.get("BOX_WEBHOOK_ID"))
+    # connector records synced into the store (GitHub/Slack/...)
+    connectors_count: dict[str, int] = {}
+    try:
+        from core.store import store as _store
+
+        connectors_count = _store.count_by_source()
+    except Exception:
+        connectors_count = {}
     return {
         "meetings": count("Sources/Meetings"),
         "slack": count("Sources/Slack"),
         "issues_prs": issues,
         "docs": count("Sources/Docs"),
         "live": live,
+        "connectors": connectors_count,
     }
 
 
@@ -115,6 +124,21 @@ async def ask(req: Request):
     context = body.get("context") or []  # prior questions in this conversation
     if not isinstance(context, list):
         context = []
+
+    # 1) Try connector records (GitHub/Slack/...) first. The asker's principal
+    #    is the acting-as person's email, which the identity map resolves to the
+    #    canonical principal used in connector ACLs.
+    principal = _principal_for(user_id)
+    try:
+        from core.answer_connectors import answer_from_connectors
+
+        hit = answer_from_connectors(principal, question, context=context)
+        if hit is not None:
+            return hit
+    except Exception as e:  # never let the connector path break the Box answer
+        print("connector answer path error:", e)
+
+    # 2) Fall back to the Box pipeline (unchanged).
     answer_mod, _ = _agents()
     if answer_mod is None:
         return JSONResponse(_stub_answer(question), status_code=200)
@@ -123,6 +147,27 @@ async def ask(req: Request):
     except Exception as e:  # pragma: no cover
         result = _stub_answer(question, error=str(e))
     return result
+
+
+def _principal_for(user_id: str) -> str:
+    """Map the acting-as Box App User id -> that person's email, so the identity
+    resolver can canonicalize it for connector ACL checks."""
+    name = next((n for n, uid in USERS.items() if str(uid) == str(user_id)),
+                _state["acting_as"])
+    first = (name or "").split()[0].lower() if name else ""
+    return f"{first}@payments.example" if first else name
+
+
+@app.post("/api/sync/{connector}")
+async def sync_connector(connector: str):
+    """Pull a connector's records into the store so Shadow can answer across it.
+    e.g. POST /api/sync/github  (needs GITHUB_TOKEN + GITHUB_REPO in env)."""
+    try:
+        from core.sync import sync
+
+        return sync(connector)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 @app.post("/api/ingest")

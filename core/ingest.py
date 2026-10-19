@@ -66,10 +66,17 @@ def _enrich(record: SourceRecord) -> dict:
     item["summary"] = summary
     if components:
         item["components"] = components
-    # a connector may already have classified via the Acl; honor an explicit
-    # hr/restricted sensitivity surfaced by extraction
-    if sens in ("restricted", "hr"):
-        item["sensitivity"] = sens
+    # Distinguish two very different notions of "restricted":
+    #  - acl.visibility == "restricted": permission-gated, but STILL answerable
+    #    to those on the allow-list. The ACL filter enforces this at query time,
+    #    so the record stays in the store (not quarantined).
+    #  - sensitivity == "hr": genuinely sensitive (a 1:1). NEVER answerable.
+    # Only an explicit hr signal from extraction quarantines a record; an
+    # extraction "restricted" is downgraded to the ACL (which already handles it).
+    if sens == "hr":
+        item["sensitivity"] = "hr"
+    elif item.get("sensitivity") == "restricted":
+        item["sensitivity"] = "gated"   # answerable, permission-gated by Acl
     return item
 
 
@@ -85,8 +92,9 @@ def ingest_record(record: SourceRecord, store=None) -> dict:
     steps = [{"step": "librarian", "sourceType": item["sourceType"],
               "sensitivity": item["sensitivity"]}]
 
-    # sensitivity gate — hr/restricted never enter answerable memory
-    if item["sensitivity"] in ("hr", "restricted"):
+    # quarantine gate — ONLY genuinely sensitive (hr) content is pulled out of
+    # answerable memory. Permission-gated records stay in and are filtered by Acl.
+    if item["sensitivity"] == "hr":
         result = {"ok": True, "stopped_at": "librarian",
                   "sensitivity": item["sensitivity"], "item": item, "steps": steps}
         if store is not None:

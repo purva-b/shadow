@@ -127,5 +127,32 @@ class SlackConnector:
                            verify_header="x-slack-signature",
                            secret_env="SLACK_SIGNING_SECRET")
 
+    # -- native search ------------------------------------------------------ #
+    def search(self, query: str, limit: int = 8) -> list[SourceRecord]:
+        """Use Slack's OWN search.messages instead of scanning channel history.
+        Note: search.messages needs a USER token (xoxp) with search:read; with a
+        bot token it returns nothing, and the caller falls back to the index."""
+        if not self.token:
+            return []
+        try:
+            data = self._call("search.messages", {"query": query, "count": limit})
+        except Exception:
+            return []
+        out = []
+        for m in data.get("messages", {}).get("matches", [])[:limit]:
+            cid = (m.get("channel") or {}).get("id", "")
+            ts = m.get("ts", "")
+            body = m.get("text", "")
+            chan = self._channel_meta(cid) if cid else {}
+            out.append(SourceRecord(
+                source=self.name, external_id=f"{cid}:{ts}", kind="chat",
+                title=f"#{chan.get('name', cid)} message",
+                body=body, occurred_on="",
+                people=[m.get("user", "")] if m.get("user") else [],
+                components=[], issue_ids=ISSUE_RE.findall(body),
+                acl=self._acl_for_channel(chan),
+                url=m.get("permalink", "")))
+        return out
+
 
 assert isinstance(SlackConnector(token="", channels=""), Connector)

@@ -139,6 +139,15 @@ async def ask(req: Request):
     #    canonical principal used in connector ACLs.
     principal = _principal_for(user_id)
     try:
+        # agentic path: a Strands Agent orchestrates the native source searches
+        # (GitHub/Slack/Confluence) + the semantic index. Opt-in (slower).
+        from core import agent_answer
+
+        if agent_answer.is_enabled():
+            hit = agent_answer.answer_agentic(principal, question, context=context)
+            if hit is not None:
+                return hit
+
         from core.answer_connectors import answer_from_connectors
 
         hit = answer_from_connectors(principal, question, context=context)

@@ -118,5 +118,34 @@ class GitHubConnector:
                            verify_header="x-hub-signature-256",
                            secret_env="GITHUB_WEBHOOK_SECRET")
 
+    # -- native search ------------------------------------------------------ #
+    def search(self, query: str, limit: int = 8) -> list[SourceRecord]:
+        """Use GitHub's OWN search API (issues + PRs) instead of enumerating —
+        GitHub ranks its own data far better than a blind scan. Scoped to the
+        configured repo. Returns normalized SourceRecords (ACL applied by the
+        caller's filter)."""
+        if not (self.repo and self.token):
+            return []
+        q = f"{query} repo:{self.repo}"
+        try:
+            data = self._get("/search/issues", {"q": q, "per_page": limit})
+        except Exception:
+            return []
+        out = []
+        for it in data.get("items", [])[:limit]:
+            kind = "pr" if it.get("pull_request") else "issue"
+            body = f"{it.get('title','')}\n\n{it.get('body') or ''}"
+            people = [it.get("user", {}).get("login", "")]
+            out.append(SourceRecord(
+                source=self.name, external_id=str(it["number"]), kind=kind,
+                title=it.get("title", ""), body=body,
+                occurred_on=(it.get("created_at", "") or "")[:10],
+                people=[p for p in people if p],
+                components=[lbl.get("name", "") for lbl in it.get("labels", []) or []],
+                issue_ids=ISSUE_RE.findall(body),
+                acl=Acl(visibility="internal"),   # repo-level; refined on full fetch
+                url=it.get("html_url", "")))
+        return out
+
 
 assert isinstance(GitHubConnector(repo="", token=""), Connector)

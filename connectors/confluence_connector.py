@@ -115,5 +115,32 @@ class ConfluenceConnector:
         return WebhookSpec(path="/api/webhook/confluence",
                            verify_header="", secret_env="CONFLUENCE_WEBHOOK_SECRET")
 
+    # -- native search ------------------------------------------------------ #
+    def search(self, query: str, limit: int = 8) -> list[SourceRecord]:
+        """Use Confluence's OWN CQL search instead of enumerating pages —
+        Confluence ranks its own content. Returns normalized SourceRecords."""
+        if not (self.base and self.token):
+            return []
+        cql = f'text ~ "{query}"'
+        if self.space:
+            cql = f'space = "{self.space}" AND {cql}'
+        try:
+            data = self._get("/rest/api/content/search",
+                             {"cql": cql, "limit": limit, "expand": "history"})
+        except Exception:
+            return []
+        out = []
+        for pg in data.get("results", [])[:limit]:
+            pid = str(pg["id"])
+            title = pg.get("title", f"page {pid}")
+            out.append(SourceRecord(
+                source=self.name, external_id=pid, kind="doc",
+                title=title, body=title,     # body filled on full fetch
+                occurred_on=(pg.get("history", {}).get("createdDate", "") or "")[:10],
+                people=[], components=[], issue_ids=ISSUE_RE.findall(title),
+                acl=self._acl_for_page(pid),
+                url=f"{self.base}/pages/{pid}"))
+        return out
+
 
 assert isinstance(ConfluenceConnector(base_url="", email="", token=""), Connector)

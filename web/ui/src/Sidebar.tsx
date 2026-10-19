@@ -13,22 +13,40 @@ export function Sidebar({
   onSwitch: (name: string) => void;
   onSynced?: () => void;
 }) {
-  const [syncing, setSyncing] = useState(false);
+  const [syncingName, setSyncingName] = useState<string>("");
   const [syncMsg, setSyncMsg] = useState<string>("");
 
-  async function syncGithub() {
-    setSyncing(true);
+  async function syncConnector(name: string) {
+    setSyncingName(name);
     setSyncMsg("");
     try {
-      const r = await api.syncConnector("github");
-      setSyncMsg(r.ok ? `+${r.ingested ?? 0} synced` : (r.error || "sync failed"));
+      const r = await api.syncConnector(name);
+      setSyncMsg(r.ok ? `${name}: +${r.ingested ?? 0} synced` : `${name}: ${r.error || "failed"}`);
       onSynced?.();
     } catch (e) {
-      setSyncMsg("sync failed");
+      setSyncMsg(`${name}: sync failed`);
     } finally {
-      setSyncing(false);
+      setSyncingName("");
     }
   }
+
+  const connectorRow = (
+    name: string, icon: string, label: string, hint: string,
+  ) => (
+    <li className="connector-row">
+      <Icon d={icon} sm />
+      <span>{label}</span>
+      <em>{sources?.connectors?.[name] ?? 0}</em>
+      <button
+        className="sync-btn"
+        onClick={() => syncConnector(name)}
+        disabled={!!syncingName}
+        title={hint}
+      >
+        {syncingName === name ? "Syncing…" : "Sync"}
+      </button>
+    </li>
+  );
 
   const navItem = (id: "ask" | "memory", icon: string, label: string) => (
     <button
@@ -74,19 +92,10 @@ export function Sidebar({
           {row(ICONS.slack, "Slack channels", sources?.slack ?? "—")}
           {row(ICONS.issue, "Issues and PRs", sources?.issues_prs ?? "—")}
           {row(ICONS.doc, "Docs in Box", sources?.docs ?? "—")}
-          <li className="connector-row">
-            <Icon d={ICONS.github} sm />
-            <span>GitHub (PRs/issues)</span>
-            <em>{sources?.connectors?.github ?? 0}</em>
-            <button
-              className="sync-btn"
-              onClick={syncGithub}
-              disabled={syncing}
-              title="Pull PRs/issues from the configured repo (needs GITHUB_TOKEN + GITHUB_REPO)"
-            >
-              {syncing ? "Syncing…" : "Sync"}
-            </button>
-          </li>
+          {connectorRow("github", ICONS.github, "GitHub (PRs/issues)",
+            "Pull PRs/issues from the configured repo (needs GITHUB_TOKEN + GITHUB_REPO)")}
+          {connectorRow("slack", ICONS.slack, "Slack (live)",
+            "Pull channel threads from Slack (needs SLACK_BOT_TOKEN)")}
           {syncMsg && <li className="sync-msg">{syncMsg}</li>}
         </ul>
       </div>

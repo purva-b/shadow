@@ -9,6 +9,7 @@ from __future__ import annotations
 import connectors
 from connectors.base import SourceRef
 
+from . import embeddings
 from . import ingest as core_ingest
 from .store import store
 
@@ -20,7 +21,7 @@ def sync(connector_name: str, limit: int = 50, **conn_kwargs) -> dict:
                 "available": connectors.available()}
     conn = connectors.load(connector_name, **conn_kwargs)
 
-    ingested, errors = 0, []
+    ingested, embedded, errors = 0, 0, []
     try:
         refs = list(conn.discover())[:limit]
     except Exception as e:
@@ -31,9 +32,14 @@ def sync(connector_name: str, limit: int = 50, **conn_kwargs) -> dict:
             record = conn.fetch(ref)
             core_ingest.ingest_record(record, store=store)
             ingested += 1
+            # PRE-EMBED at sync time: warm the embedding cache now so the first
+            # question over these records is fast (no per-query embed latency).
+            if embeddings.available():
+                if embeddings.embed(f"{record.title}\n{record.body}") is not None:
+                    embedded += 1
         except Exception as e:
             errors.append({"ref": getattr(ref, "external_id", "?"), "error": str(e)})
 
     return {"ok": True, "connector": connector_name, "ingested": ingested,
-            "errors": errors[:5], "store_total": store.count(),
+            "embedded": embedded, "errors": errors[:5], "store_total": store.count(),
             "by_source": store.count_by_source()}

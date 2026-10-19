@@ -38,7 +38,6 @@ IDS = json.loads((ROOT / "seed" / "ids.json").read_text())
 USERS = IDS["users"]
 FOLDERS = IDS["folders"]
 FILE_IDS = IDS["file_ids"]
-DEMO_CACHE = os.environ.get("DEMO_MODE_CACHE", "true").lower() == "true"
 
 # user display metadata for the sidebar
 USER_META = {
@@ -51,7 +50,6 @@ SWITCHABLE = ["Alex Rivera", "Priya Nair", "Dana Kim"]
 app = FastAPI(title="Shadow")
 
 _state = {"acting_as": "Alex Rivera"}
-_ask_cache: dict[tuple, dict] = {}
 
 
 def _uid(name: str) -> str:
@@ -117,10 +115,6 @@ async def ask(req: Request):
     context = body.get("context") or []  # prior questions in this conversation
     if not isinstance(context, list):
         context = []
-    ctx_key = "|".join(str(c).lower() for c in context)
-    key = (user_id, question.lower(), ctx_key)
-    if DEMO_CACHE and key in _ask_cache:
-        return _ask_cache[key]
     answer_mod, _ = _agents()
     if answer_mod is None:
         return JSONResponse(_stub_answer(question), status_code=200)
@@ -128,8 +122,6 @@ async def ask(req: Request):
         result = answer_mod.answer(user_id, question, context=context)
     except Exception as e:  # pragma: no cover
         result = _stub_answer(question, error=str(e))
-    if DEMO_CACHE:
-        _ask_cache[key] = result
     return result
 
 
@@ -146,7 +138,6 @@ async def ingest(req: Request):
             file_id = items[-1]["id"]
     if ingest_mod is None or not file_id:
         return {"ok": False, "reason": "no file / agents unavailable"}
-    _ask_cache.clear()  # memory changed -> invalidate cached answers
     try:
         return ingest_mod.ingest(file_id)
     except Exception as e:  # pragma: no cover
@@ -197,7 +188,6 @@ def simulate_confirm():
                 T.complete_task(t["id"], as_user=aid)
                 closed += 1
         T.apply_metadata(dec, "shadowDecision", {"confirmed": "yes"})
-        _ask_cache.clear()
         try:
             from agents.activity import log_activity
 

@@ -67,7 +67,6 @@ BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
 AWS_REGION=us-east-1
 AGENTCORE_RUNTIME_ARN=        # set after `agentcore launch`
 SHADOW_ROOT_FOLDER_ID=        # printed by setup_box.py
-DEMO_MODE_CACHE=true
 # webhook (optional): BOX_WEBHOOK_KEY_1, BOX_WEBHOOK_KEY_2, BOX_WEBHOOK_ID
 ```
 

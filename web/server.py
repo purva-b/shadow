@@ -174,9 +174,26 @@ async def sync_connector(connector: str):
     try:
         from core.sync import sync
 
-        return sync(connector)
+        # Box needs its folder-id map to enumerate the corpus; other connectors
+        # read their config from env.
+        kwargs = {"folders": FOLDERS} if connector == "box" else {}
+        return sync(connector, **kwargs)
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+@app.get("/api/notifications")
+def notifications():
+    """Proactive notifications Shadow raised on new records, for the acting-as
+    person (newest first)."""
+    try:
+        from core import notify
+
+        principal = _principal_for(_uid(_state["acting_as"]))
+        return {"rows": notify.recent(limit=20, principal=principal),
+                "all": notify.recent(limit=20)}
+    except Exception as e:
+        return {"rows": [], "all": [], "error": str(e)}
 
 
 @app.post("/api/ingest")

@@ -110,5 +110,17 @@ def ingest_record(record: SourceRecord, store=None) -> dict:
 
     if store is not None:
         store.put(record, item)
+
+    # proactive: ping the owners if this record is notable (decision change,
+    # PR/issue activity, an event naming them). Best-effort, never blocks ingest.
+    notes = []
+    try:
+        from . import notify
+
+        notes = notify.notify_for_record(record)
+    except Exception:
+        notes = []
+
     return {"ok": True, "item": item, "steps": steps,
-            "people": record.people, "url": record.url}
+            "people": record.people, "url": record.url,
+            "notifications": notes}

@@ -98,6 +98,8 @@ export function Sidebar({
             "Pull channel threads from Slack (needs SLACK_BOT_TOKEN)")}
           {connectorRow("confluence", ICONS.doc, "Confluence (wiki)",
             "Pull pages from Confluence (needs CONFLUENCE_BASE_URL + API token)")}
+          {connectorRow("calendar", ICONS.meeting, "Calendar (events)",
+            "Pull events from Google Calendar (needs GCAL_ACCESS_TOKEN)")}
           {syncMsg && <li className="sync-msg">{syncMsg}</li>}
         </ul>
       </div>

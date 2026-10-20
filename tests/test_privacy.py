@@ -37,9 +37,17 @@ def test_restricted_who_takes_no_attendees():
 
 
 def test_find_restricted_topic_tool_returns_no_metadata():
-    """The Strands tool form of the check must also leak nothing."""
-    from agents import tools_strands
+    """The Strands tool form of the check must also leak nothing.
 
-    src = inspect.getsource(tools_strands.find_restricted_topic)
-    assert '"topic":' not in src, "tool leaks topic"
-    assert '"attendees":' not in src, "tool leaks attendees"
+    Read the source FILE rather than importing the module: agents/tools_strands
+    imports `strands`, an optional (agents-extra) dependency not present in the
+    lint/test CI lane. The leak check is purely textual, so the file read is the
+    right, dependency-free way to assert it."""
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "agents" / "tools_strands.py").read_text()
+    # scope the assertion to the function body
+    start = src.index("def find_restricted_topic")
+    body = src[start:start + 1500]
+    assert '"topic":' not in body, "tool leaks topic"
+    assert '"attendees":' not in body, "tool leaks attendees"

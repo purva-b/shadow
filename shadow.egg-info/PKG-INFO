@@ -1,0 +1,21 @@
+Metadata-Version: 2.4
+Name: shadow
+Version: 0.1.0
+Summary: Permission-aware AI knowledge agent over pluggable team sources
+Requires-Python: >=3.11
+Requires-Dist: box-sdk-gen
+Requires-Dist: fastapi
+Requires-Dist: uvicorn[standard]
+Requires-Dist: boto3
+Requires-Dist: python-dotenv
+Requires-Dist: requests
+Requires-Dist: pyyaml
+Requires-Dist: pydantic>=2
+Provides-Extra: agents
+Requires-Dist: strands-agents; extra == "agents"
+Requires-Dist: bedrock-agentcore; extra == "agents"
+Requires-Dist: bedrock-agentcore-starter-toolkit; extra == "agents"
+Provides-Extra: dev
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: pyright; extra == "dev"
+Requires-Dist: pytest; extra == "dev"

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "shadow"
 version = "0.1.0"
@@ -18,6 +22,11 @@ dependencies = [
 # agent orchestration + deploy (not needed for the offline test lane)
 agents = ["strands-agents", "bedrock-agentcore", "bedrock-agentcore-starter-toolkit"]
 dev = ["ruff", "pyright", "pytest"]
+
+[tool.setuptools]
+# flat layout: these top-level dirs ARE the package. Declared explicitly because
+# setuptools can't auto-discover when several top-level dirs look like packages.
+packages = ["core", "connectors", "shadow_box", "agents", "web"]
 
 [tool.ruff]
 line-length = 100

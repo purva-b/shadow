@@ -147,22 +147,35 @@ def _normalize_dates(values: dict) -> dict:
     return out
 
 
+def _patch_ops(values: dict, existing: dict) -> list[dict]:
+    """Build JSON-Patch ops choosing 'replace' for a field already present and
+    'add' for a new one. Pure + tested — this is the logic that was buggy."""
+    return [
+        {"op": "replace" if k in existing else "add", "path": f"/{k}", "value": v}
+        for k, v in values.items()
+    ]
+
+
 def apply_metadata(file_id: str, template: str, values: dict, scope: str = "enterprise") -> None:
-    """Create the metadata instance, or update it if it already exists."""
+    """Create the metadata instance, or update it if it already exists.
+
+    On update (409), Box's JSON-Patch requires "replace" for a field that
+    already exists and "add" for a new one. The old code tried all-add, then on
+    failure all-replace — which breaks for a MIX of new + existing fields (the
+    common case): all-add fails on the existing ones, all-replace fails on the
+    new ones. Fix: read the current instance and choose the op PER FIELD."""
     values = _normalize_dates(values)
     base = f"{API}/files/{file_id}/metadata/{scope}/{template}"
     r = _SESSION.post(base, headers=_headers(), json=values, timeout=30)
-    if r.status_code == 409:  # already exists -> JSON-Patch update
-        ops = [{"op": "add", "path": f"/{k}", "value": v} for k, v in values.items()]
-        hdr = _headers()
-        hdr["Content-Type"] = "application/json-patch+json"
-        r2 = _SESSION.put(base, headers=hdr, json=ops, timeout=30)
-        # fields that already exist need "replace" not "add"; retry per field
-        if r2.status_code >= 400:
-            ops = [{"op": "replace", "path": f"/{k}", "value": v} for k, v in values.items()]
-            _SESSION.put(base, headers=hdr, json=ops, timeout=30).raise_for_status()
+    if r.status_code != 409:
+        r.raise_for_status()
         return
-    r.raise_for_status()
+    # already exists -> build per-field add/replace from what's currently set
+    existing = get_metadata(file_id, template, scope=scope) or {}
+    ops = _patch_ops(values, existing)
+    hdr = _headers()
+    hdr["Content-Type"] = "application/json-patch+json"
+    _SESSION.put(base, headers=hdr, json=ops, timeout=30).raise_for_status()
 
 
 def get_metadata(file_id: str, template: str, as_user: str | None = None,

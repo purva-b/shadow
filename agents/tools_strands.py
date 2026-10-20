@@ -89,13 +89,14 @@ def search_team_memory(component: str = "", issue_id: str = "") -> str:
 
 @tool
 def find_restricted_topic(topic: str) -> str:
-    """Check whether a Restricted source exists on this topic that the current
-    user CANNOT read (the privacy boundary). `topic` is a short phrase from the
-    question (e.g. 'vendor pricing', 'checkout budget'). Returns JSON
-    {found: bool, restricted_only: bool, topic: str, attendees: str}. When found
-    is true, the team has material the asker is not allowed to see — never try to
-    reveal it; name who was there instead. restricted_only=true means there is NO
-    public source on this, so the honest answer is a refusal."""
+    """Check whether a Restricted source on this topic exists that the current
+    user CANNOT read — the privacy boundary — WITHOUT leaking anything about it.
+    Returns JSON {found: bool, restricted_only: bool} ONLY. It deliberately does
+    NOT return the file's title, topic, or attendees: revealing those would leak
+    the existence and contents of a document the asker is not allowed to see.
+    When found is true, tell the asker a related source exists they can't access
+    and point them at a readable owner — never anything from the restricted file.
+    restricted_only=true means no public source exists, so the answer is a refusal."""
     uid = _actor()
     folder = _folders().get("Restricted")
     if not folder:
@@ -112,11 +113,10 @@ def find_restricted_topic(topic: str) -> str:
         matched = [t for t in (only_terms + ["checkout", "budget", "spend", "cost"])
                    if t in q and t in hay]
         if matched:
+            # return ONLY the boolean signals — nothing about the file crosses out
             return json.dumps({
                 "found": True,
                 "restricted_only": all(t in only_terms for t in matched),
-                "topic": md.get("title") or it["name"],
-                "attendees": md.get("people", ""),
             })
     return json.dumps({"found": False})
 

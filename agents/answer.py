@@ -184,46 +184,45 @@ def _decisions(components: list[str], user_id: str) -> list[dict]:
 
 
 def _restricted_hit(question: str, user_id: str) -> dict | None:
-    """Service account finds a Restricted file matching the topic that the
-    asker cannot read -> privacy signal. Returns host/attendee names only.
+    """Detect that a Restricted source on the topic exists which the asker
+    CANNOT read — the privacy boundary — WITHOUT leaking anything about it.
 
-    Returns a dict with keys: file_name, attendees, topic. This only reports
-    that a restricted source EXISTS on the topic and the asker cannot see it;
-    the caller decides whether that means a full refusal (no other readable
-    sources) or a partial answer with a withheld-source note."""
-    import json  # noqa: F401
+    Returns only {"only": bool} or None. It deliberately does NOT return the
+    file name, title, attendees, or summary: telling the asker those would leak
+    the existence and contents of a document their Box identity is not allowed
+    to see. The caller may say "a related source exists you can't access" and
+    point to a readable owner (from the people cards), never anything derived
+    from the restricted file itself.
 
+    `only` distinguishes a full refusal (the ONLY source is restricted) from a
+    partial answer (public sources also exist). That flag is derived from the
+    QUESTION's own terms, not from the restricted file's metadata, so no
+    restricted content crosses the boundary. The restricted file's topic-match
+    is confirmed against its summary ONLY to avoid false refusals, and that
+    matched text is discarded — never returned."""
     restricted_folder = ids()["folders"].get("Restricted")
     if not restricted_folder:
         return None
-    # Two kinds of restricted topic:
-    #  - "only" terms live ONLY in the restricted file (vendor/pricing/contract)
-    #     -> a question about them is a FULL refusal, there is no public source.
-    #  - "shared" terms also have PUBLIC sources (checkout, budget-of-a-feature)
-    #     -> a question about them is a PARTIAL answer + withheld note.
     only_terms = ["vendor", "pricing", "contract", "design review"]
     shared_terms = ["checkout", "budget", "spend", "cost"]
     topic_terms = only_terms + shared_terms
     q = question.lower()
     if not any(t in q for t in topic_terms):
         return None
-    for it in T.folder_items(restricted_folder):  # service account view
+    for it in T.folder_items(restricted_folder):  # service account: detect only
         if it["type"] != "file":
             continue
         if T.can_read(it["id"], user_id):  # asker CAN read -> not a privacy case
             continue
         md = T.get_metadata(it["id"], "shadowItem") or {}
-        # only treat as a hit when the restricted file is actually on-topic
         title = (md.get("title") or it["name"]).lower()
         summary = (md.get("summary") or "").lower()
         hay = f"{title} {summary}"
         matched = [t for t in topic_terms if t in q and t in hay]
         if not matched:
             continue
-        # full refusal when EVERY matched term is a restricted-only term
         only = all(t in only_terms for t in matched)
-        return {"file_name": it["name"], "attendees": (md.get("people") or ""),
-                "topic": md.get("title") or it["name"], "only": only}
+        return {"only": only}   # NOTHING about the file leaves this function
     return None
 
 
@@ -387,8 +386,9 @@ ANSWER_SYSTEM = (
     "Work the question using your tools, in this spirit:\n"
     "1. find the topic's component and/or issue id, then search_team_memory.\n"
     "2. call find_restricted_topic — if it reports found=true you MUST NOT reveal "
-    "that source; if restricted_only=true, say you can't answer from team memory "
-    "and name who was there; otherwise answer from what you CAN read and add that "
+    "that source, its title, or who was in it; if restricted_only=true, say you "
+    "can't answer because a related source is in a space the asker can't access "
+    "and point them to a readable owner; otherwise answer from what you CAN read and add that "
     "one source was withheld.\n"
     "3. call box_ai_answer on the readable file_ids for a cited answer.\n"
     "4. call get_decision and lookup_people to state the decision status and who "
@@ -457,15 +457,25 @@ def _answer_pipeline(user_id: str, question: str,
     cards = _people_cards()
     org = _org_chart()
 
-    def _restricted_who(attendees: str) -> dict:
+    def _restricted_who() -> dict | None:
+        """Point the asker at a READABLE owner for the topic — derived only from
+        people cards the asker can already see, NEVER from the restricted file's
+        attendees (that would leak who was in it). Prefer an active owner of the
+        question's component; fall back to an engineering manager from the org.
+        Returns None if no suitable readable person exists (no hardcoded name)."""
+        active = [c for c in cards if c.get("active") == "yes"]
+        for comp in components:
+            for c in active:
+                if comp in (c.get("expertise") or []):
+                    return {"name": c.get("name"), "role": c.get("role"),
+                            "reason": "Owns this area and can point you to the right place.",
+                            "moved_note": None}
         for c in cards:
-            if c.get("email", "") in attendees and c.get("active") == "yes":
+            if (c.get("role", "") or "").lower().startswith("engineering manager"):
                 return {"name": c.get("name"), "role": c.get("role"),
-                        "reason": "Was in that review and can brief you directly.",
+                        "reason": "Manages this team and can route your request.",
                         "moved_note": None}
-        return {"name": "Dana Kim", "role": "Engineering Manager",
-                "reason": "Hosted that review and can brief you.",
-                "moved_note": None}
+        return None
 
     items = _matched_items(issue_ids, components, user_id)
     # Rank by (relevance, source-type). Relevance rewards an item whose
@@ -499,10 +509,11 @@ def _answer_pipeline(user_id: str, question: str,
     # refuse when nothing readable matched at all.
     restricted_only = bool(restricted and restricted.get("only"))
     if restricted and (restricted_only or not cits):
-        who = _restricted_who(restricted.get("attendees", ""))
-        note = ("I can't answer that from team memory — the only source on it is in "
-                "a Restricted folder your Box access doesn't include. "
-                f"{who['name']} was in that review and can brief you directly.")
+        who = _restricted_who()
+        who_line = (f" {who['name']} ({who['role']}) can point you to the right place."
+                    if who else "")
+        note = ("I can't answer that from team memory — a related source is in a "
+                "restricted space your Box access doesn't include." + who_line)
         log_activity("Answer", f"Refused restricted-only topic for user {user_id}",
                      "", "privacy: full refusal")
         return {
@@ -580,11 +591,11 @@ def _answer_pipeline(user_id: str, question: str,
     # Restricted source on this topic was withheld. Say so, honestly.
     partial_note = None
     if restricted:
-        rwho = _restricted_who(restricted.get("attendees", ""))
-        partial_note = ("One source on this is in a Restricted folder your Box "
-                        f"access doesn't include ({restricted.get('topic','')}), so "
-                        "it's left out of the answer above. "
-                        f"{rwho['name']} can fill in that part.")
+        rwho = _restricted_who()
+        who_line = (f" {rwho['name']} can fill in that part." if rwho else "")
+        partial_note = ("One related source is in a restricted space your Box "
+                        "access doesn't include, so it's left out of the answer "
+                        "above." + who_line)
         log_activity("Answer", f"Partial answer, 1 source withheld for user {user_id}",
                      "", "privacy: partial")
 

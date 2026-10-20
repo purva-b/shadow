@@ -56,8 +56,13 @@ FOLDERS = {
 AGENT_USERS = {
     # Classifier: reads the Inbox, writes metadata + promotes files out of it
     "Shadow Classifier": {
+        # editor on Inbox: read a new file + move it out after classifying.
+        # uploader on the destinations: it may DROP a file into them but NOT
+        # read or modify what is already there — so an injected Classifier can't
+        # read existing Restricted/Quarantine contents, only promote into them.
         "read": ["Inbox"],
-        "write": ["Inbox", "Sources", "Restricted", "Quarantine"],
+        "write": ["Inbox"],
+        "upload": ["Sources", "Restricted", "Quarantine"],
     },
     # Scribe: reads classified meetings, writes ONLY meeting notes
     "Shadow Scribe": {
@@ -267,10 +272,27 @@ def collab_group(folder_id: str, group_id: str, role: str = "viewer"):
 
 
 def collab_user(folder_id: str, user_id: str, role: str = "viewer"):
-    requests.post(f"{API}/collaborations", headers=hdr(),
-                  json={"item": {"id": folder_id, "type": "folder"},
-                        "accessible_by": {"id": user_id, "type": "user"},
-                        "role": role}, timeout=30)
+    """Grant (or UPDATE) a user's collaboration on a folder at `role`.
+    Idempotent and role-correcting: if the collaboration already exists at a
+    different role (e.g. a prior run granted editor and we now want the tighter
+    uploader), update it rather than leaving the looser grant in place."""
+    r = requests.post(f"{API}/collaborations", headers=hdr(),
+                      json={"item": {"id": folder_id, "type": "folder"},
+                            "accessible_by": {"id": user_id, "type": "user"},
+                            "role": role}, timeout=30)
+    if r.status_code < 300:
+        return
+    # Box returns 400 (or 409) when the collaboration already exists — in either
+    # case, reconcile the role to the requested one via PUT (so a downgrade from
+    # a prior run's looser grant actually lands).
+    cols = requests.get(f"{API}/folders/{folder_id}/collaborations",
+                        headers=hdr(), timeout=30).json().get("entries", [])
+    for c in cols:
+        if (c.get("accessible_by") or {}).get("id") == str(user_id):
+            if c.get("role") != role:
+                requests.put(f"{API}/collaborations/{c['id']}", headers=hdr(),
+                             json={"role": role}, timeout=30)
+            return
 
 
 def apply_permissions(ids: dict, group_id: str, users: dict[str, str]):
@@ -301,14 +323,19 @@ def apply_agent_permissions(ids: dict, agents: dict[str, str]):
             fid = ids["folders"].get(path)
             if fid:
                 collab_user(fid, uid, "editor")
+        for path in scope.get("upload", []):
+            fid = ids["folders"].get(path)
+            if fid:
+                collab_user(fid, uid, "uploader")   # drop-only, cannot read contents
+        granted = set(scope.get("write", [])) | set(scope.get("upload", []))
         for path in scope.get("read", []):
-            # don't downgrade a folder already granted as editor
-            if path in scope.get("write", []):
+            if path in granted:   # don't downgrade a folder already granted higher
                 continue
             fid = ids["folders"].get(path)
             if fid:
                 collab_user(fid, uid, "viewer")
-        print(f"  agent {name}: write={scope.get('write')} read={scope.get('read')}")
+        print(f"  agent {name}: write={scope.get('write')} "
+              f"upload={scope.get('upload', [])} read={scope.get('read')}")
 
 
 # --------------------------------------------------------------------------- #

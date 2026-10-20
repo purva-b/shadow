@@ -40,8 +40,14 @@ def _enterprise_id() -> str:
     return eid
 
 
+@lru_cache(maxsize=1)
 def get_service_client() -> BoxClient:
-    """Service account client (enterprise subject)."""
+    """Service account client (enterprise subject).
+
+    Cached per process: box-sdk-gen's BoxCCGAuth caches and auto-refreshes the
+    access token internally, so the win is NOT rebuilding the auth object (and
+    discarding its token cache) on every call. One client, tokens refreshed on
+    expiry by the SDK."""
     base = _cfg_base()
     auth = BoxCCGAuth(
         config=CCGConfig(
@@ -53,8 +59,14 @@ def get_service_client() -> BoxClient:
     return BoxClient(auth=auth)
 
 
+@lru_cache(maxsize=64)
 def get_user_client(user_id: str) -> BoxClient:
-    """Client that acts AS a specific App User (user-subject token)."""
+    """Client that acts AS a specific App User (user-subject token).
+
+    Cached per user id (bounded LRU): reusing the auth object keeps the SDK's
+    per-user token cache alive across calls, so an answer that makes many Box
+    reads AS the same asker fetches one token, not one per read. Tokens still
+    refresh on expiry inside the SDK."""
     base = _cfg_base()
     auth = BoxCCGAuth(
         config=CCGConfig(

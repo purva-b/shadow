@@ -170,10 +170,13 @@ def _decisions(components: list[str], user_id: str) -> list[dict]:
     if not folder:
         return []
     out = []
-    for it in T.folder_items(folder, as_user=user_id):
+    # inline metadata in ONE folder listing (md_template) instead of a
+    # get_metadata round-trip per file — the Decisions folder is small but this
+    # was N+1 Box calls on the hot answer path.
+    for it in T.folder_items(folder, as_user=user_id, md_template="shadowDecision"):
         if it.get("type") != "file":
             continue
-        md = T.get_metadata(it["id"], "shadowDecision", as_user=user_id)
+        md = _md_from_listing(it, "shadowDecision")
         if not md:
             continue
         comps = md.get("components", []) or []

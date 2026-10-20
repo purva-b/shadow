@@ -16,6 +16,11 @@ from .client import get_client, get_service_client
 
 API = "https://api.box.com/2.0"
 
+# One connection-pooled Session for all raw REST calls, instead of a fresh TCP
+# connection per request. Box is one host, so keep-alive + pooling is a real
+# win on an answer that makes many reads.
+_SESSION = requests.Session()
+
 
 # --------------------------------------------------------------------------- #
 # token helper for raw REST (AI / metadata query endpoints)
@@ -101,14 +106,14 @@ def folder_items(folder_id: str, as_user: str | None = None,
         scope = f"enterprise_{eid}" if eid else "enterprise"
         fields += f",metadata.{scope}.{md_template}"
     url = f"{API}/folders/{folder_id}/items?fields={fields}&limit=1000"
-    r = requests.get(url, headers=_headers(as_user), timeout=30)
+    r = _SESSION.get(url, headers=_headers(as_user), timeout=30)
     r.raise_for_status()
     return r.json().get("entries", [])
 
 
 def folder_item_count(folder_id: str, as_user: str | None = None) -> int:
     url = f"{API}/folders/{folder_id}/items?fields=id&limit=1"
-    r = requests.get(url, headers=_headers(as_user), timeout=30)
+    r = _SESSION.get(url, headers=_headers(as_user), timeout=30)
     if r.status_code != 200:
         return 0
     return r.json().get("total_count", 0)
@@ -117,7 +122,7 @@ def folder_item_count(folder_id: str, as_user: str | None = None) -> int:
 def can_read(file_id: str, as_user: str) -> bool:
     """True iff the given App User can GET this file (permission probe)."""
     url = f"{API}/files/{file_id}?fields=id,name"
-    r = requests.get(url, headers=_headers(as_user), timeout=30)
+    r = _SESSION.get(url, headers=_headers(as_user), timeout=30)
     return r.status_code == 200
 
 
@@ -140,16 +145,16 @@ def apply_metadata(file_id: str, template: str, values: dict, scope: str = "ente
     """Create the metadata instance, or update it if it already exists."""
     values = _normalize_dates(values)
     base = f"{API}/files/{file_id}/metadata/{scope}/{template}"
-    r = requests.post(base, headers=_headers(), json=values, timeout=30)
+    r = _SESSION.post(base, headers=_headers(), json=values, timeout=30)
     if r.status_code == 409:  # already exists -> JSON-Patch update
         ops = [{"op": "add", "path": f"/{k}", "value": v} for k, v in values.items()]
         hdr = _headers()
         hdr["Content-Type"] = "application/json-patch+json"
-        r2 = requests.put(base, headers=hdr, json=ops, timeout=30)
+        r2 = _SESSION.put(base, headers=hdr, json=ops, timeout=30)
         # fields that already exist need "replace" not "add"; retry per field
         if r2.status_code >= 400:
             ops = [{"op": "replace", "path": f"/{k}", "value": v} for k, v in values.items()]
-            requests.put(base, headers=hdr, json=ops, timeout=30).raise_for_status()
+            _SESSION.put(base, headers=hdr, json=ops, timeout=30).raise_for_status()
         return
     r.raise_for_status()
 
@@ -157,7 +162,7 @@ def apply_metadata(file_id: str, template: str, values: dict, scope: str = "ente
 def get_metadata(file_id: str, template: str, as_user: str | None = None,
                  scope: str = "enterprise") -> dict | None:
     url = f"{API}/files/{file_id}/metadata/{scope}/{template}"
-    r = requests.get(url, headers=_headers(as_user), timeout=30)
+    r = _SESSION.get(url, headers=_headers(as_user), timeout=30)
     if r.status_code == 200:
         return r.json()
     return None
@@ -183,7 +188,7 @@ def metadata_query(template: str, query: str, params: dict, ancestor_folder_id: 
     }
     if fields:
         body["fields"] = fields
-    r = requests.post(f"{API}/metadata_queries/execute_read",
+    r = _SESSION.post(f"{API}/metadata_queries/execute_read",
                       headers=_headers(as_user), json=body, timeout=30)
     if r.status_code >= 400:
         return []
@@ -199,7 +204,7 @@ def search(query: str, ancestor_folder_id: str | None = None,
               "fields": "id,name,type"}
     if ancestor_folder_id:
         params["ancestor_folder_ids"] = ancestor_folder_id
-    r = requests.get(f"{API}/search", headers=_headers(as_user),
+    r = _SESSION.get(f"{API}/search", headers=_headers(as_user),
                      params=params, timeout=30)
     if r.status_code >= 400:
         return []
@@ -216,7 +221,7 @@ def extract_structured(file_id: str, template: str, scope: str = "enterprise") -
         "metadata_template": {"template_key": template, "scope": scope,
                               "type": "metadata_template"},
     }
-    r = requests.post(f"{API}/ai/extract_structured", headers=_headers(),
+    r = _SESSION.post(f"{API}/ai/extract_structured", headers=_headers(),
                       json=body, timeout=120)
     r.raise_for_status()
     return r.json()
@@ -231,7 +236,7 @@ def ai_ask(file_ids: list[str], question: str, as_user: str | None = None) -> di
         "items": items,
         "include_citations": True,
     }
-    r = requests.post(f"{API}/ai/ask", headers=_headers(as_user), json=body, timeout=120)
+    r = _SESSION.post(f"{API}/ai/ask", headers=_headers(as_user), json=body, timeout=120)
     if r.status_code >= 400:
         return {"answer": "", "citations": [], "error": r.text, "status": r.status_code}
     return r.json()
@@ -241,7 +246,7 @@ def ai_ask(file_ids: list[str], question: str, as_user: str | None = None) -> di
 # tasks
 # --------------------------------------------------------------------------- #
 def create_task_and_assign(file_id: str, message: str, assignee_id: str) -> dict:
-    task = requests.post(
+    task = _SESSION.post(
         f"{API}/tasks", headers=_headers(),
         json={"item": {"id": file_id, "type": "file"}, "action": "complete",
               "message": message},
@@ -249,7 +254,7 @@ def create_task_and_assign(file_id: str, message: str, assignee_id: str) -> dict
     )
     task.raise_for_status()
     task_id = task.json()["id"]
-    assign = requests.post(
+    assign = _SESSION.post(
         f"{API}/task_assignments", headers=_headers(),
         json={"task": {"id": task_id, "type": "task"},
               "assign_to": {"id": assignee_id}},
@@ -262,7 +267,7 @@ def create_task_and_assign(file_id: str, message: str, assignee_id: str) -> dict
 def complete_task(task_assignment_id: str, as_user: str | None = None) -> None:
     # Box only lets the ASSIGNEE resolve a task assignment, so pass the
     # assignee's user id as as_user (the 'Simulate Dana confirming' path).
-    r = requests.put(
+    r = _SESSION.put(
         f"{API}/task_assignments/{task_assignment_id}",
         headers=_headers(as_user),
         json={"resolution_state": "completed"},
@@ -272,10 +277,10 @@ def complete_task(task_assignment_id: str, as_user: str | None = None) -> None:
 
 
 def list_task_assignments(file_id: str) -> list[dict]:
-    tasks = requests.get(f"{API}/files/{file_id}/tasks", headers=_headers(), timeout=30)
+    tasks = _SESSION.get(f"{API}/files/{file_id}/tasks", headers=_headers(), timeout=30)
     out = []
     for t in tasks.json().get("entries", []):
-        a = requests.get(f"{API}/tasks/{t['id']}/assignments",
+        a = _SESSION.get(f"{API}/tasks/{t['id']}/assignments",
                          headers=_headers(), timeout=30)
         out.extend(a.json().get("entries", []))
     return out
@@ -286,7 +291,7 @@ def list_task_assignments(file_id: str) -> list[dict]:
 # --------------------------------------------------------------------------- #
 def embed_link(file_id: str, as_user: str | None = None) -> str | None:
     url = f"{API}/files/{file_id}?fields=expiring_embed_link"
-    r = requests.get(url, headers=_headers(as_user), timeout=30)
+    r = _SESSION.get(url, headers=_headers(as_user), timeout=30)
     if r.status_code != 200:
         return None
     return (r.json().get("expiring_embed_link") or {}).get("url")

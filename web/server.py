@@ -16,8 +16,9 @@ import os
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse as _JR  # noqa: F401
 from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -58,7 +59,6 @@ try:
 except Exception as _e:  # never block startup on wiring
     print("core wiring skipped:", _e)
 
-_state = {"acting_as": "Alex Rivera"}
 
 
 def _uid(name: str) -> str:
@@ -78,24 +78,55 @@ def _agents():
         return None, None
 
 
-@app.get("/api/acting-as")
-def get_acting_as():
-    name = _state["acting_as"]
+def _name_for(user_id: str) -> str:
+    return next((n for n, uid in USERS.items() if str(uid) == str(user_id)), "")
+
+
+@app.get("/api/me")
+def me(request: Request):
+    """The current session identity (or null). Identity is read from the signed
+    session cookie ONLY — never from a request parameter."""
+    from web.auth import current_user_id
+
+    uid = current_user_id(request)
+    name = _name_for(uid) if uid else ""
     return {
-        "name": name, "user_id": _uid(name),
+        "logged_in": bool(uid),
+        "name": name or None,
+        "user_id": uid,
         "meta": USER_META.get(name, {}),
+        # dev-login roster (only meaningful in dev mode)
         "options": [{"name": n, "user_id": _uid(n), **USER_META.get(n, {})}
                     for n in SWITCHABLE],
     }
 
 
-@app.post("/api/acting-as")
-async def set_acting_as(req: Request):
+@app.post("/api/login")
+async def login(req: Request, response: Response):
+    """DEV login: establish a session as one of the seeded App Users. This is a
+    stand-in for Box OAuth — identity is set server-side and carried in a signed
+    cookie. Enabled only under SHADOW_DEV."""
+    from web.auth import COOKIE, dev_mode, sign
+
+    if not dev_mode():
+        return JSONResponse({"error": "dev login disabled (set SHADOW_DEV=1)"},
+                            status_code=404)
     body = await req.json()
     name = body.get("user") or body.get("name")
-    if name in USERS:
-        _state["acting_as"] = name
-    return get_acting_as()
+    if name not in USERS:
+        return JSONResponse({"error": "unknown user"}, status_code=400)
+    uid = _uid(name)
+    response.set_cookie(COOKIE, sign(str(uid)), httponly=True, samesite="lax")
+    return {"logged_in": True, "name": name, "user_id": uid,
+            "meta": USER_META.get(name, {})}
+
+
+@app.post("/api/logout")
+def logout(response: Response):
+    from web.auth import COOKIE
+
+    response.delete_cookie(COOKIE)
+    return {"logged_in": False}
 
 
 @app.get("/api/sources")
@@ -127,8 +158,12 @@ def sources():
 
 @app.post("/api/ask")
 async def ask(req: Request):
+    from web.auth import current_user_id
+
+    user_id = current_user_id(req)   # identity ONLY from the signed session
+    if not user_id:
+        return JSONResponse({"error": "not logged in"}, status_code=401)
     body = await req.json()
-    user_id = str(body.get("user_id") or _uid(_state["acting_as"]))
     question = (body.get("question") or "").strip()
     context = body.get("context") or []  # prior questions in this conversation
     if not isinstance(context, list):
@@ -170,8 +205,7 @@ async def ask(req: Request):
 def _principal_for(user_id: str) -> str:
     """Map the acting-as Box App User id -> that person's email, so the identity
     resolver can canonicalize it for connector ACL checks."""
-    name = next((n for n, uid in USERS.items() if str(uid) == str(user_id)),
-                _state["acting_as"])
+    name = next((n for n, uid in USERS.items() if str(uid) == str(user_id)), "")
     first = (name or "").split()[0].lower() if name else ""
     return f"{first}@payments.example" if first else name
 
@@ -249,13 +283,14 @@ async def webhook(connector: str, req: Request):
 
 
 @app.get("/api/notifications")
-def notifications():
+def notifications(request: Request):
     """Proactive notifications Shadow raised on new records, for the acting-as
     person (newest first)."""
     try:
         from core import notify
-
-        principal = _principal_for(_uid(_state["acting_as"]))
+        from web.auth import current_user_id
+        uid = current_user_id(request)
+        principal = _principal_for(uid) if uid else ""
         return {"rows": notify.recent(limit=20, principal=principal),
                 "all": notify.recent(limit=20)}
     except Exception as e:
@@ -315,6 +350,10 @@ def decisions():
 
 @app.post("/api/simulate/confirm-task")
 def simulate_confirm():
+    from web.auth import dev_mode
+    if not dev_mode():
+        return JSONResponse({"error": "simulate disabled (set SHADOW_DEV=1)"},
+                            status_code=404)
     dec = FILE_IDS["Memory/Decisions/retry-idempotency-keys.md"]
     dana = USERS["Dana Kim"]
     closed = 0
@@ -338,8 +377,11 @@ def simulate_confirm():
 
 
 @app.get("/api/embed")
-def embed(file_id: str):
-    uid = _uid(_state["acting_as"])
+def embed(file_id: str, request: Request):
+    from web.auth import current_user_id
+    uid = current_user_id(request)
+    if not uid:
+        return JSONResponse({"url": None, "error": "not logged in"}, status_code=401)
     try:
         link = T.embed_link(file_id, as_user=uid)
         return {"url": link}

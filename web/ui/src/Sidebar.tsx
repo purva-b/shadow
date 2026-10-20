@@ -119,7 +119,7 @@ export function Sidebar({
         </select>
         <div className="user-chip">
           <span className="avatar">
-            {actingAs?.meta.initials ?? (actingAs ? initials(actingAs.name) : "")}
+            {actingAs?.meta.initials ?? (actingAs?.name ? initials(actingAs.name) : "")}
           </span>
           <div>
             <div className="user-name">{actingAs?.name}</div>

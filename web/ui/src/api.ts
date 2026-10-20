@@ -3,7 +3,7 @@ import type {
 } from "./types";
 
 async function get<T>(path: string): Promise<T> {
-  const r = await fetch(path);
+  const r = await fetch(path, { credentials: "same-origin" });
   if (!r.ok) throw new Error(`${path} ${r.status}`);
   return r.json() as Promise<T>;
 }
@@ -11,6 +11,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   const r = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify(body ?? {}),
   });
   if (!r.ok) throw new Error(`${path} ${r.status}`);
@@ -18,11 +19,12 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 
 export const api = {
-  actingAs: () => get<ActingAs>("/api/acting-as"),
-  setActingAs: (user: string) => post<ActingAs>("/api/acting-as", { user }),
+  me: () => get<ActingAs>("/api/me"),
+  login: (user: string) => post<ActingAs>("/api/login", { user }),
+  logout: () => post<{ logged_in: boolean }>("/api/logout", {}),
   sources: () => get<Sources>("/api/sources"),
-  ask: (user_id: string, question: string, context: string[] = []) =>
-    post<Answer>("/api/ask", { user_id, question, context }),
+  ask: (question: string, context: string[] = []) =>
+    post<Answer>("/api/ask", { question, context }),
   ingest: () => post<{ ok: boolean; steps?: unknown; error?: string }>("/api/ingest", {}),
   syncConnector: (name: string) =>
     post<{ ok: boolean; ingested?: number; store_total?: number; error?: string }>(

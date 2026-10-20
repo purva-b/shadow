@@ -43,8 +43,9 @@ export interface ActingAsOption {
   initials?: string;
 }
 export interface ActingAs {
-  name: string;
-  user_id: string;
+  logged_in?: boolean;
+  name: string | null;
+  user_id: string | null;
   meta: { subtitle?: string; initials?: string };
   options: ActingAsOption[];
 }

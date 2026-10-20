@@ -59,7 +59,7 @@ export default function App() {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { api.actingAs().then(setActingAs); api.sources().then(setSources).catch(() => {}); }, []);
+  useEffect(() => { api.me().then(setActingAs).catch(() => {}); api.sources().then(setSources).catch(() => {}); }, []);
 
   const active = useMemo(() => convos.find((c) => c.id === activeId) || null, [convos, activeId]);
 
@@ -69,7 +69,8 @@ export default function App() {
   }, [active?.turns.length, loading]);
 
   const onSwitch = async (name: string) => {
-    const r = await api.setActingAs(name);
+    await api.login(name);
+    const r = await api.me();
     setActingAs(r);
     setConvos([]); setActiveId(null); setView("ask");
   };
@@ -79,7 +80,7 @@ export default function App() {
   // ask(): if there's an active conversation, APPEND a follow-up turn; else start one
   const ask = async (question: string) => {
     const q = question.trim();
-    if (!q || !actingAs || loading) return;
+    if (!q || !actingAs || !actingAs.logged_in || loading) return;
     setView("ask");
     setDraft("");
 
@@ -98,7 +99,7 @@ export default function App() {
 
     setLoading(true);
     try {
-      const ans: Answer = await api.ask(actingAs.user_id, q, context);
+      const ans: Answer = await api.ask(q, context);
       setConvos((cs) => cs.map((c) => {
         if (c.id !== convId) return c;
         const turns = [...c.turns];

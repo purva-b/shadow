@@ -42,10 +42,38 @@ COMPONENTS = ["retry-service", "payments-api", "ledger", "gateway-client", "chec
 
 # folder layout: name -> list of subfolders
 FOLDERS = {
+    "Inbox": [],   # service-only: uploads land here; only the Classifier reads it
     "Sources": ["Meetings", "Slack", "Issues", "PRs", "Docs", "Org"],
     "Memory": ["Meeting Notes", "Decisions", "People", "Handbook"],
     "Restricted": [],
     "Quarantine": [],
+}
+
+# per-agent App Users with LEAST-PRIVILEGE Box access. The map value lists the
+# folder paths each agent may act on; apply_agent_permissions grants exactly
+# those, so a prompt-injected agent still cannot touch anything outside its role
+# — Box enforces it, not the prompt. (Brief §3.1/§3.3.)
+AGENT_USERS = {
+    # Classifier: reads the Inbox, writes metadata + promotes files out of it
+    "Shadow Classifier": {
+        "read": ["Inbox"],
+        "write": ["Inbox", "Sources", "Restricted", "Quarantine"],
+    },
+    # Scribe: reads classified meetings, writes ONLY meeting notes
+    "Shadow Scribe": {
+        "read": ["Sources/Meetings"],
+        "write": ["Memory/Meeting Notes"],
+    },
+    # Librarian: reads notes + decisions, writes ONLY decisions
+    "Shadow Librarian": {
+        "read": ["Memory/Meeting Notes", "Memory/Decisions"],
+        "write": ["Memory/Decisions"],
+    },
+    # Cartographer: reads org + people, writes ONLY people cards
+    "Shadow Cartographer": {
+        "read": ["Sources/Org", "Memory/People"],
+        "write": ["Memory/People"],
+    },
 }
 
 # which seed area maps into which Box folder path
@@ -105,6 +133,18 @@ def ensure_templates():
             {"key": "expertise", "type": "multiSelect", "options": opts(COMPONENTS)},
             {"key": "lastActiveOn", "type": "date"},
         ],
+        # the agents' shared blackboard + idempotency key. `state` tracks a file
+        # through the ingest pipeline; `processed_version` is the Box file
+        # version last fully processed (so a replayed webhook for the same
+        # version is a no-op); `last_error`/`attempts` support retry/visibility.
+        "shadowPipeline": [
+            {"key": "state", "type": "enum", "options": opts([
+                "received", "classified", "noted", "decisions_checked",
+                "people_updated", "done", "failed"])},
+            {"key": "processedVersion", "type": "string"},
+            {"key": "lastError", "type": "string"},
+            {"key": "attempts", "type": "float"},
+        ],
     }
     existing = requests.get(f"{API}/metadata_templates/enterprise",
                             headers=hdr(), timeout=30).json()
@@ -127,6 +167,27 @@ def ensure_templates():
 # --------------------------------------------------------------------------- #
 # app users
 # --------------------------------------------------------------------------- #
+def ensure_agent_users() -> dict[str, str]:
+    """Create the per-agent App Users (idempotent). Separate from the human demo
+    users: these are the agent IDENTITIES whose Box access is scoped by role."""
+    existing = requests.get(f"{API}/users?filter_term=&limit=1000",
+                            headers=hdr(), timeout=30).json().get("entries", [])
+    by_name = {u["name"]: u["id"] for u in existing}
+    out: dict[str, str] = {}
+    for name in AGENT_USERS:
+        if name in by_name:
+            out[name] = by_name[name]
+            print(f"  agent user {name} exists ({by_name[name]})")
+            continue
+        r = requests.post(f"{API}/users", headers=hdr(),
+                          json={"name": name, "is_platform_access_only": True},
+                          timeout=30)
+        r.raise_for_status()
+        out[name] = r.json()["id"]
+        print(f"  created agent user {name} ({out[name]})")
+    return out
+
+
 def ensure_app_users() -> dict[str, str]:
     existing = requests.get(f"{API}/users?filter_term=&limit=1000",
                             headers=hdr(), timeout=30).json().get("entries", [])
@@ -228,6 +289,28 @@ def apply_permissions(ids: dict, group_id: str, users: dict[str, str]):
           "Restricted -> Dana, Priya, Jordan)")
 
 
+def apply_agent_permissions(ids: dict, agents: dict[str, str]):
+    """Grant each agent ONLY its role's folders: editor on its write set, viewer
+    on its read-only set. This is the least-privilege boundary Box enforces — a
+    test that tells the Scribe to write a decision gets a permission error."""
+    for name, scope in AGENT_USERS.items():
+        uid = agents.get(name)
+        if not uid:
+            continue
+        for path in scope.get("write", []):
+            fid = ids["folders"].get(path)
+            if fid:
+                collab_user(fid, uid, "editor")
+        for path in scope.get("read", []):
+            # don't downgrade a folder already granted as editor
+            if path in scope.get("write", []):
+                continue
+            fid = ids["folders"].get(path)
+            if fid:
+                collab_user(fid, uid, "viewer")
+        print(f"  agent {name}: write={scope.get('write')} read={scope.get('read')}")
+
+
 # --------------------------------------------------------------------------- #
 # uploads + metadata
 # --------------------------------------------------------------------------- #
@@ -326,12 +409,15 @@ def main():
     templates = ensure_templates()
     print("app users:")
     users = ensure_app_users()
+    print("agent users:")
+    agents = ensure_agent_users()
     print("group:")
     group_id = ensure_group(list(users.values()))
     print("folders:")
     ids = build_tree()
     print("permissions:")
     apply_permissions(ids, group_id, users)
+    apply_agent_permissions(ids, agents)
     print("uploads + metadata:")
     file_ids = upload_area_files(ids)
     link_decision_sources(file_ids)
@@ -342,6 +428,7 @@ def main():
         "root_folder_id": ids["root"],
         "folders": ids["folders"],
         "users": users,
+        "agent_users": agents,
         "group_id": group_id,
         "templates": templates,
         "file_ids": file_ids,

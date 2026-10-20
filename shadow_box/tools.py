@@ -156,7 +156,8 @@ def _patch_ops(values: dict, existing: dict) -> list[dict]:
     ]
 
 
-def apply_metadata(file_id: str, template: str, values: dict, scope: str = "enterprise") -> None:
+def apply_metadata(file_id: str, template: str, values: dict, scope: str = "enterprise",
+                   as_user: str | None = None) -> None:
     """Create the metadata instance, or update it if it already exists.
 
     On update (409), Box's JSON-Patch requires "replace" for a field that
@@ -166,14 +167,14 @@ def apply_metadata(file_id: str, template: str, values: dict, scope: str = "ente
     new ones. Fix: read the current instance and choose the op PER FIELD."""
     values = _normalize_dates(values)
     base = f"{API}/files/{file_id}/metadata/{scope}/{template}"
-    r = _SESSION.post(base, headers=_headers(), json=values, timeout=30)
+    r = _SESSION.post(base, headers=_headers(as_user), json=values, timeout=30)
     if r.status_code != 409:
         r.raise_for_status()
         return
     # already exists -> build per-field add/replace from what's currently set
-    existing = get_metadata(file_id, template, scope=scope) or {}
+    existing = get_metadata(file_id, template, scope=scope, as_user=as_user) or {}
     ops = _patch_ops(values, existing)
-    hdr = _headers()
+    hdr = _headers(as_user)
     hdr["Content-Type"] = "application/json-patch+json"
     _SESSION.put(base, headers=hdr, json=ops, timeout=30).raise_for_status()
 

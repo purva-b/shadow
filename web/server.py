@@ -303,11 +303,19 @@ async def ingest(req: Request):
     file_id = body.get("file_id")
     _, ingest_mod = _agents()
     if not file_id:
-        # newest file in Meetings
-        items = [it for it in T.folder_items(FOLDERS["Sources/Meetings"])
-                 if it["type"] == "file"]
-        if items:
-            file_id = items[-1]["id"]
+        # newest file in Meetings by CREATION DATE (not folder list order, which
+        # is name-sorted and is not chronological).
+
+        url = (f"https://api.box.com/2.0/folders/"
+               f"{FOLDERS['Sources/Meetings']}/items"
+               f"?fields=id,name,type&sort=date&direction=DESC&limit=1")
+        try:
+            r = T._SESSION.get(url, headers=T._headers(), timeout=30)
+            entries = [it for it in r.json().get("entries", []) if it["type"] == "file"]
+            if entries:
+                file_id = entries[0]["id"]
+        except Exception:
+            file_id = None
     if ingest_mod is None or not file_id:
         return {"ok": False, "reason": "no file / agents unavailable"}
     try:

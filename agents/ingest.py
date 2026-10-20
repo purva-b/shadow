@@ -142,13 +142,21 @@ def scribe_note(file_id: str, text: str, md: dict) -> dict:
                 f"**People:** {md.get('people','')}\n")
     note_md = f"# Meeting Notes — {title}, {date}\n\n{body}\n"
 
-    fname = f"{date}-note.md".replace(" ", "-")
-    scratch = os.environ.get("KIROCREW_SCRATCH", tempfile.gettempdir())
+    fname = f"note-{file_id}.md"   # unique per source file; a replay overwrites in place
+    scratch = tempfile.mkdtemp(prefix="shadow-ingest-")  # per-run, no collisions
     path = os.path.join(scratch, fname)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(note_md)
     folder = ids()["folders"]["Memory/Meeting Notes"]
-    new_id = T.upload_file(folder, path, name=f"{date}-standup-notes.md")
+    note_name = f"notes-{file_id}.md"
+    # idempotent: if a note for this meeting already exists, update it in place
+    # instead of uploading a duplicate
+    existing_id = next((it["id"] for it in T.folder_items(folder)
+                        if it.get("type") == "file" and it["name"] == note_name), None)
+    if existing_id:
+        new_id = T.upload_new_version(existing_id, path)
+    else:
+        new_id = T.upload_file(folder, path, name=note_name)
     note_meta = {
         "sourceType": "meeting", "title": f"Notes — {title}", "occurredOn": date,
         "components": md.get("components", []), "issueIds": md.get("issueIds", ""),
@@ -186,7 +194,14 @@ def librarian_decision(file_id: str, text: str, md: dict) -> dict:
     decisions = _existing_decisions(components)
     if not decisions:
         return {"changed": False, "reason": "no matching decision"}
-    dec = decisions[0]
+    # deterministic pick: the decision whose components best overlap this file's,
+    # then by file id for a stable tiebreak — NOT an arbitrary decisions[0].
+    want = set(md.get("components", []) or [])
+    dec = sorted(
+        decisions,
+        key=lambda d: (-len(want & set((d.get("metadata") or {}).get("components", []) or [])),
+                       str(d.get("file_id", ""))),
+    )[0]
     current = dec["metadata"]
     prompt = (
         "You compare a team's recorded decision against a new meeting transcript.\n"
@@ -227,8 +242,8 @@ def librarian_decision(file_id: str, text: str, md: dict) -> dict:
             f"**Decided on:** {decided_on}\n**Owners:** {current.get('owners','')}\n"
             f"**Confirmed:** {confirmed}\n\n## Context\n"
             f"Updated from the {decided_on} standup. {verdict.get('reason','')}\n")
-    scratch = os.environ.get("KIROCREW_SCRATCH", tempfile.gettempdir())
-    path = os.path.join(scratch, "retry-idempotency-keys.md")
+    scratch = tempfile.mkdtemp(prefix="shadow-ingest-")  # per-run, no collisions
+    path = os.path.join(scratch, "decision.md")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(body)
     T.upload_new_version(dec["file_id"], path)
@@ -310,12 +325,26 @@ def cartographer_update(md: dict) -> dict:
 # --------------------------------------------------------------------------- #
 def ingest(file_id: str) -> dict:
     file_id = str(file_id)
+
+    # IDEMPOTENCY: a webhook can fire more than once for the same file version
+    # (Box retries, at-least-once delivery). Key on the Box file version: if we
+    # already processed THIS version, do nothing — so replaying the same webhook
+    # N times yields exactly one set of outputs. The key lives on the file's
+    # shadowPipeline.processedVersion (the template added in Week 2).
+    version = T.file_version(file_id)
+    pipe = T.get_metadata(file_id, "shadowPipeline") or {}
+    if version and pipe.get("processedVersion") == version:
+        log_activity("Webhook", f"Duplicate ignored (version {version} already "
+                     f"processed): {_file_name(file_id)}", file_id)
+        return {"ok": True, "skipped": "already processed", "version": version}
+
     log_activity("Webhook", f"New file received: {_file_name(file_id)}", file_id)
     text = _download_text(file_id)
 
     step1 = librarian_classify(file_id, text)
     md = step1["metadata"]
     if step1.get("stop"):
+        _mark_processed(file_id, version, "done")
         return {"ok": True, "stopped_at": "librarian",
                 "sensitivity": step1["sensitivity"], "steps": [step1]}
 
@@ -324,7 +353,18 @@ def ingest(file_id: str) -> dict:
         steps.append(scribe_note(file_id, text, md))
         steps.append(librarian_decision(file_id, text, md))
     steps.append(cartographer_update(md))
+    _mark_processed(file_id, version, "done")
     return {"ok": True, "steps": steps, "metadata": md}
+
+
+def _mark_processed(file_id: str, version: str, state: str) -> None:
+    """Record that this file VERSION has been fully processed — the idempotency
+    guard reads this on the next (possibly duplicate) webhook."""
+    try:
+        T.apply_metadata(file_id, "shadowPipeline",
+                         {"processedVersion": version or "", "state": state})
+    except Exception as e:  # don't fail the whole ingest on the flag write
+        log_activity("Webhook", f"could not mark processed: {e}", file_id)
 
 
 if __name__ == "__main__":

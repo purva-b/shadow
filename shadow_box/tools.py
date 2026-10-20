@@ -125,6 +125,18 @@ def folder_item_count(folder_id: str, as_user: str | None = None) -> int:
     return r.json().get("total_count", 0)
 
 
+def file_version(file_id: str, as_user: str | None = None) -> str:
+    """Box's current version id for the file (the `etag`). Used as the ingest
+    idempotency key: a webhook replay for the same version is a no-op."""
+    url = f"{API}/files/{file_id}?fields=id,etag,file_version"
+    r = _SESSION.get(url, headers=_headers(as_user), timeout=30)
+    if r.status_code != 200:
+        return ""
+    j = r.json()
+    fv = (j.get("file_version") or {}).get("id")
+    return str(fv or j.get("etag") or "")
+
+
 def can_read(file_id: str, as_user: str) -> bool:
     """True iff the given App User can GET this file (permission probe)."""
     url = f"{API}/files/{file_id}?fields=id,name"

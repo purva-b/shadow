@@ -39,6 +39,8 @@ shadow_box/client.py
 shadow_box/tools.py
 tests/test_auth.py
 tests/test_harnesses.py
+tests/test_ingest_idempotency.py
+tests/test_metadata.py
 tests/test_privacy.py
 web/__init__.py
 web/auth.py

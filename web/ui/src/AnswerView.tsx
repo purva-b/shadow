@@ -92,6 +92,21 @@ export function AnswerTurn({ question, answer, followups = [], onAsk }:
           </div>
         )}
 
+        {answer.agent_trace && answer.agent_trace.length > 0 && (
+          <details className="agent-trace">
+            <summary>How Shadow searched ({answer.agent_trace.length} step{answer.agent_trace.length > 1 ? "s" : ""})</summary>
+            <ul>
+              {answer.agent_trace.map((st, i) => (
+                <li key={i}>
+                  <span className="atool">{st.tool.replace("_search", "")}</span>
+                  <span className="aquery">"{st.query}"</span>
+                  <span className="acount">{st.found} found{st.withheld ? ` · ${st.withheld} withheld` : ""}</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
         {cites.length > 0 && (
           <div className="sources">
             <h4>Sources</h4>

@@ -20,12 +20,20 @@ export interface WhoToAsk {
   moved_note: string | null;
 }
 
+export interface AgentStep {
+  tool: string;
+  query: string;
+  found: number;
+  withheld: number;
+}
+
 export interface Answer {
   answer_markdown: string;
   citations: Citation[];
   decision_status: DecisionStatus | null;
   who_to_ask: WhoToAsk | null;
   restricted_note: string | null;
+  agent_trace?: AgentStep[];
 }
 
 export interface ActingAsOption {

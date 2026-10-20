@@ -11,7 +11,6 @@ The asker (canonical principal) is bound per-request via set_principal().
 from __future__ import annotations
 
 import json
-import threading
 
 from strands import tool
 
@@ -19,15 +18,34 @@ import connectors
 from . import acl, retrieve
 from .store import store as _store
 
-_local = threading.local()
+_PRINCIPAL = {"v": ""}
+
+
+# Strands may run a tool on its own worker thread, so the trace buffer is a
+# process-global list (reset per request by set_principal), not thread-local.
+# One request at a time per process is the model here (the agentic path is
+# serialized), so a shared buffer is correct and simplest.
+_TRACE: list = []
 
 
 def set_principal(principal: str) -> None:
-    _local.principal = str(principal)
+    _PRINCIPAL["v"] = str(principal)
+    _TRACE.clear()
 
 
 def _principal() -> str:
-    return getattr(_local, "principal", "")
+    return _PRINCIPAL["v"]
+
+
+def _record(tool_name: str, query: str, n_readable: int, n_withheld: int) -> None:
+    """Record one tool invocation so the UI can show WHAT the agent searched."""
+    _TRACE.append({"tool": tool_name, "query": query,
+                   "found": n_readable, "withheld": n_withheld})
+
+
+def get_trace() -> list:
+    """Return the tool-call trace recorded since the last set_principal()."""
+    return list(_TRACE)
 
 
 def _load(name: str, **kw):
@@ -37,10 +55,12 @@ def _load(name: str, **kw):
         return None
 
 
-def _dump(records) -> str:
+def _dump(records, tool_name: str = "", query: str = "") -> str:
     me = _principal()
     readable = acl.readable(records, me)
     withheld = acl.withheld(records, me)
+    if tool_name:
+        _record(tool_name, query, len(readable), len(withheld))
     return json.dumps({
         "readable": [{"source": r.source, "id": r.external_id, "title": r.title,
                       "summary": (r.body or "")[:240], "url": r.url}
@@ -57,6 +77,7 @@ def semantic_search(query: str) -> str:
     {readable:[{source,id,title,summary,url}], withheld_count}. Only records the
     current asker may read appear in `readable`."""
     got = retrieve.recall(query, _principal(), _store, limit=6)
+    _record("semantic_search", query, len(got.readable), len(got.withheld))
     return json.dumps({
         "readable": [{"source": r.source, "id": r.external_id, "title": r.title,
                       "summary": (r.body or "")[:240], "url": r.url}
@@ -74,7 +95,7 @@ def github_search(query: str) -> str:
     conn = _load("github")
     if conn is None or not hasattr(conn, "search"):
         return json.dumps({"readable": [], "withheld_count": 0})
-    return _dump(conn.search(query))
+    return _dump(conn.search(query), "github_search", query)
 
 
 @tool
@@ -85,7 +106,7 @@ def slack_search(query: str) -> str:
     conn = _load("slack")
     if conn is None or not hasattr(conn, "search"):
         return json.dumps({"readable": [], "withheld_count": 0})
-    return _dump(conn.search(query))
+    return _dump(conn.search(query), "slack_search", query)
 
 
 @tool
@@ -96,7 +117,7 @@ def confluence_search(query: str) -> str:
     conn = _load("confluence")
     if conn is None or not hasattr(conn, "search"):
         return json.dumps({"readable": [], "withheld_count": 0})
-    return _dump(conn.search(query))
+    return _dump(conn.search(query), "confluence_search", query)
 
 
 # the toolset an agent gets to orchestrate across sources

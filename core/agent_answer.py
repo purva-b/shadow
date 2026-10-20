@@ -70,23 +70,24 @@ def answer_agentic(principal: str, question: str, context=None) -> dict | None:
             tools_connectors.set_principal(principal)
             agent = strands_agent(system=AGENT_SYSTEM,
                                   tools=tools_connectors.CONNECTOR_TOOLS)
-            return str(agent(q)).strip()
+            prose = str(agent(q)).strip()
+            return prose, tools_connectors.get_trace()
 
         with _fut.ThreadPoolExecutor(max_workers=2) as ex:
             f_base = ex.submit(_base)
             f_loop = ex.submit(_loop)
             base = f_base.result()
-            prose = f_loop.result()
+            prose, trace = f_loop.result()
 
         if prose and len(prose) > 40:
             if base is None:
                 base = {"answer_markdown": prose, "citations": [],
                         "decision_status": None, "who_to_ask": None,
-                        "restricted_note": None}
+                        "restricted_note": None, "agent_trace": trace}
             else:
                 # agent drove the reasoning + prose; keep the deterministic
                 # structured fields (citations, who-to-ask, decision, withheld)
-                base = {**base, "answer_markdown": prose}
+                base = {**base, "answer_markdown": prose, "agent_trace": trace}
         return base
     except Exception:
         # any agent failure -> let the caller use the deterministic path

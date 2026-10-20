@@ -30,6 +30,8 @@ def _token(as_user: str | None = None) -> str:
     # box-sdk-gen exposes the retrieved token via the auth object
     auth = client.auth
     tok = auth.retrieve_token()
+    if not tok.access_token:
+        raise RuntimeError("Box auth returned no access token")
     return tok.access_token
 
 
@@ -64,6 +66,8 @@ def upload_file(folder_id: str, path: str, name: str | None = None) -> str:
             ),
             fh,
         )
+    if not uploaded.entries:
+        raise RuntimeError("Box upload returned no file entry")
     return uploaded.entries[0].id
 
 
@@ -80,6 +84,8 @@ def upload_new_version(file_id: str, path: str) -> str:
             UploadFileVersionAttributes(name=os.path.basename(path)),
             fh,
         )
+    if not uploaded.entries:
+        raise RuntimeError("Box version upload returned no file entry")
     return uploaded.entries[0].id
 
 

@@ -50,6 +50,8 @@ ignore = [
 "seed/*.py" = ["E402"]
 
 [tool.pyright]
+venvPath = "."
+venv = ".venv"
 include = ["core", "connectors", "shadow_box", "agents", "web"]
 exclude = ["**/__pycache__", ".venv", "web/static-react", "web/ui", "seed/data"]
 # start lenient: the codebase has untyped third-party calls (box-sdk-gen, strands).

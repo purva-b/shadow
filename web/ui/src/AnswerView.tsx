@@ -100,7 +100,11 @@ export function AnswerTurn({ question, answer, followups = [], onAsk }:
                 <li key={i}>
                   <span className="atool">{st.tool.replace("_search", "")}</span>
                   <span className="aquery">"{st.query}"</span>
-                  <span className="acount">{st.found} found{st.withheld ? ` · ${st.withheld} withheld` : ""}</span>
+                  <span className="acount">
+                    {st.found < 0
+                      ? "reused"
+                      : `${st.found} found${st.withheld > 0 ? ` · ${st.withheld} withheld` : ""}`}
+                  </span>
                 </li>
               ))}
             </ul>

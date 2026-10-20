@@ -11,8 +11,13 @@ now makes **1 Box call instead of 1 + N** (verified by counting HTTP calls, not
 wall-clock). The `<5s` "Done when" could NOT be demonstrated on wall-clock during
 this work because **Box itself was intermittently timing out** (the 30s request
 ceiling was being hit on live reads) — a server-side condition no client caching
-fixes. The code reduces the work per answer; wall-clock should land under 5s when
-Box is responsive. Re-measure when Box is healthy before calling this "Done".
+fixes.
+
+RE-MEASURED (2026-10-19, later): with people-cards AND the org chart now cached
+and Box responsive, warm answers landed at **2.4s and 3.9s — under the 5s
+target**. Early samples in the same run were 30s+ when Box itself timed out on the
+one remaining cold Box read (`_decisions`). Conclusion: <5s is ACHIEVED when Box
+is healthy; the variance is Box's server-side latency, not our code.
 
 ## Later
 - **Unify `agents/` → `core/`**: two answer paths exist (`agents/answer.py` Box

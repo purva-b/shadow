@@ -70,21 +70,31 @@ def _people_cards() -> list[dict]:
     return out
 
 
-def _org_chart() -> dict:
-    import json
+_ORG_CACHE = {"t": 0.0, "v": None}
 
+
+def _org_chart() -> dict:
+    """The org chart, cached 60s. It was downloaded on EVERY answer (a Box file
+    GET) with a fresh connection; it changes rarely, so cache it and reuse the
+    shared session — one of the per-answer Box round-trips removed on the hot
+    path."""
+    import json
+    import time as _time
+
+    if _ORG_CACHE["v"] is not None and (_time.time() - _ORG_CACHE["t"]) < 60:
+        return _ORG_CACHE["v"]
     fid = ids()["file_ids"].get("Org/org_chart.json")
     if not fid:
         return {}
     try:
-        import requests
-
-        tok = T._token()
-        r = requests.get(f"https://api.box.com/2.0/files/{fid}/content",
-                         headers={"Authorization": f"Bearer {tok}"}, timeout=30)
-        return json.loads(r.text)
+        r = T._SESSION.get(f"https://api.box.com/2.0/files/{fid}/content",
+                           headers=T._headers(), timeout=30)
+        data = json.loads(r.text)
     except Exception:
-        return {}
+        data = {}
+    _ORG_CACHE["t"] = _time.time()
+    _ORG_CACHE["v"] = data
+    return data
 
 
 def _matched_items(issue_ids: list[str], components: list[str],

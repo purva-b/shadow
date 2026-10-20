@@ -13,3 +13,4 @@ seed/data/
 seed/live/
 *.log
 .DS_Store
+web/ui/tsconfig.tsbuildinfo

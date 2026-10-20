@@ -7,7 +7,6 @@ This is what the /api/sync/<connector> endpoint and the poll scheduler call.
 from __future__ import annotations
 
 import connectors
-from connectors.base import SourceRef
 
 from . import embeddings
 from . import ingest as core_ingest

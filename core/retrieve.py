@@ -63,8 +63,8 @@ def recall(question: str, principal: str, store, context: list | None = None,
     """
     text = question + " " + " ".join(str(c) for c in (context or []))
     issue_ids = {m.group(0).upper() for m in ISSUE_RE.finditer(text)}
-    qwords = {w for w in re.findall(r"[a-z]{4,}", text.lower())}
-    components = {w for w in qwords}
+    qwords = set(re.findall(r"[a-z]{4,}", text.lower()))
+    components = set(qwords)
 
     candidates = store.all()
     if sources:

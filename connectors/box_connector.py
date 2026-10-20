@@ -5,8 +5,8 @@ means writing a sibling file that returns the same `SourceRecord` shape.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Iterable
 
 import requests
 

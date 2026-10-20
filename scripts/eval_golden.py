@@ -36,9 +36,9 @@ if "--semantic" not in sys.argv:
     os.environ.pop("BEDROCK_MODEL_ID", None)
     os.environ.pop("AWS_REGION", None)
 
-from connectors.base import Acl, SourceRecord          # noqa: E402
-from core import retrieve                               # noqa: E402
-from core.store import RecordStore                      # noqa: E402
+from connectors.base import Acl, SourceRecord  # noqa: E402
+from core import retrieve  # noqa: E402
+from core.store import RecordStore  # noqa: E402
 
 store = RecordStore()
 

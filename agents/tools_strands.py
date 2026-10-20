@@ -17,6 +17,7 @@ import threading
 from strands import tool
 
 from shadow_box import tools as T
+
 from .common import ids
 
 # per-thread actor binding (the App User the agent is answering AS)

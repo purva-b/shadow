@@ -30,9 +30,9 @@ try:
 except Exception:
     pass
 
-from shadow_box import tools as T  # noqa: E402
-
 import json  # noqa: E402
+
+from shadow_box import tools as T  # noqa: E402
 
 IDS = json.loads((ROOT / "seed" / "ids.json").read_text())
 USERS = IDS["users"]
@@ -358,11 +358,16 @@ def _stub_answer(question: str, error: str = "") -> dict:
 
 
 # static SPA (mounted last so /api wins) ------------------------------------- #
-# prefer the React/TS build (web/static-react); fall back to the vanilla UI.
+# the React/TS build (web/static-react, produced by `npm run build`).
 _REACT = Path(__file__).resolve().parent / "static-react"
-_VANILLA = Path(__file__).resolve().parent / "static"
-STATIC = _REACT if (_REACT / "index.html").exists() else _VANILLA
-app.mount("/", StaticFiles(directory=str(STATIC), html=True), name="static")
+if (_REACT / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(_REACT), html=True), name="static")
+else:  # no build present — API still serves; surface a clear hint at root
+    @app.get("/")
+    def _no_build():
+        return JSONResponse(
+            {"error": "UI not built — run `cd web/ui && npm run build`"},
+            status_code=503)
 
 
 if __name__ == "__main__":

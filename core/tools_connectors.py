@@ -15,6 +15,8 @@ import json
 from strands import tool
 
 import connectors
+from connectors.base import Searchable
+
 from . import acl, retrieve
 from .store import store as _store
 
@@ -114,7 +116,7 @@ def github_search(query: str) -> str:
         _record("github_search", query + " (cached)", -1, -1)
         return hit
     conn = _load("github")
-    if conn is None or not hasattr(conn, "search"):
+    if conn is None or not isinstance(conn, Searchable):
         return json.dumps({"readable": [], "withheld_count": 0})
     return _cache("github_search", query, _dump(conn.search(query), "github_search", query))
 
@@ -129,7 +131,7 @@ def slack_search(query: str) -> str:
         _record("slack_search", query + " (cached)", -1, -1)
         return hit
     conn = _load("slack")
-    if conn is None or not hasattr(conn, "search"):
+    if conn is None or not isinstance(conn, Searchable):
         return json.dumps({"readable": [], "withheld_count": 0})
     return _cache("slack_search", query, _dump(conn.search(query), "slack_search", query))
 
@@ -144,7 +146,7 @@ def confluence_search(query: str) -> str:
         _record("confluence_search", query + " (cached)", -1, -1)
         return hit
     conn = _load("confluence")
-    if conn is None or not hasattr(conn, "search"):
+    if conn is None or not isinstance(conn, Searchable):
         return json.dumps({"readable": [], "withheld_count": 0})
     return _cache("confluence_search", query, _dump(conn.search(query), "confluence_search", query))
 

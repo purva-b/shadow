@@ -19,10 +19,10 @@ import requests
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from shadow_box import tools as T  # noqa: E402
 from agents.common import ids  # noqa: E402
+from shadow_box import tools as T  # noqa: E402
 
-I = ids()
+IDS = ids()
 EMAIL = "{}@payments.example".format
 
 
@@ -33,12 +33,12 @@ def _delete_file(file_id: str):
 
 
 def _remove_oct17():
-    meetings = I["folders"]["Sources/Meetings"]
+    meetings = IDS["folders"]["Sources/Meetings"]
     for it in T.folder_items(meetings):
         if it["type"] == "file" and "2026-10-17" in it["name"]:
             _delete_file(it["id"])
             print(f"  removed {it['name']}")
-    notes = I["folders"]["Memory/Meeting Notes"]
+    notes = IDS["folders"]["Memory/Meeting Notes"]
     for it in T.folder_items(notes):
         if it["type"] == "file" and "2026-10-17" in it["name"]:
             _delete_file(it["id"])
@@ -46,9 +46,9 @@ def _remove_oct17():
 
 
 def _reset_decision():
-    dec = I["file_ids"]["Memory/Decisions/retry-idempotency-keys.md"]
-    mar = I["file_ids"].get("Meetings/2026-03-12-payments-standup.txt", "")
-    doc = I["file_ids"].get("Docs/retry-idempotency-design.md", "")
+    dec = IDS["file_ids"]["Memory/Decisions/retry-idempotency-keys.md"]
+    mar = IDS["file_ids"].get("Meetings/2026-03-12-payments-standup.txt", "")
+    doc = IDS["file_ids"].get("Docs/retry-idempotency-design.md", "")
     body = (
         "# Decision — Idempotency keys for retry double-charges\n\n"
         "**Decision:** Pause the retry change until the idempotency key design is "
@@ -72,7 +72,7 @@ def _reset_decision():
     })
     print("  decision reset -> paused / confirmed=yes / 2026-03-12")
     # complete any open tasks (as assignee)
-    dana = I["users"]["Dana Kim"]
+    dana = IDS["users"]["Dana Kim"]
     for t in T.list_task_assignments(dec):
         if t.get("resolution_state") != "completed":
             aid = t.get("assigned_to", {}).get("id", dana)

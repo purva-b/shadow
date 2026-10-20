@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Iterable
+from typing import Any
 
 import requests
 
@@ -44,7 +45,7 @@ class GitHubConnector:
             h["Authorization"] = f"Bearer {self.token}"
         return h
 
-    def _get(self, path: str, params: dict | None = None) -> dict | list:
+    def _get(self, path: str, params: dict | None = None) -> Any:
         r = requests.get(f"{API}{path}", headers=self._headers(),
                          params=params or {}, timeout=30)
         r.raise_for_status()

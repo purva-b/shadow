@@ -13,7 +13,7 @@ Two layers:
 """
 from __future__ import annotations
 
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 from connectors.base import Acl, SourceRecord
 

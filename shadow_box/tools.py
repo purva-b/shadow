@@ -12,7 +12,7 @@ from typing import Any
 
 import requests
 
-from .client import get_client, get_service_client, get_user_client
+from .client import get_client, get_service_client
 
 API = "https://api.box.com/2.0"
 

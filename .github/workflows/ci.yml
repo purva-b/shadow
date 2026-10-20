@@ -1,9 +1,8 @@
 name: shadow-ci
 
-# Guard against regressions on every push/PR: the golden eval pins connector
-# retrieval + the permission boundary; the phase1 test pins the connector
-# interface + identity + ACL. Both run on the offline keyword lane so CI needs
-# no AWS/Box/Slack credentials.
+# Guards every push/PR: lint (ruff), types (pyright), and tests (pytest —
+# golden eval + connector interface). The test lane is fully offline: no AWS,
+# Box, or source credentials required.
 on:
   push:
     branches: ["**"]
@@ -11,7 +10,7 @@ on:
     branches: ["**"]
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,17 +18,19 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
-      - name: Install runtime deps
+      - name: Install
         run: |
           python -m pip install --upgrade pip
-          # deps the core + connectors import at module load; no AWS/Box
-          # credentials are used — the test lane runs fully offline
-          pip install requests pyyaml box-sdk-gen
+          # runtime deps the modules import at load + dev tools
+          pip install -e ".[dev]"
 
-      - name: Golden eval (retrieval + ACL, keyword lane)
-        run: python scripts/eval_golden.py
+      - name: Lint (ruff)
+        run: ruff check .
 
-      - name: Phase 1 interface test (connectors + identity + ACL)
-        run: python scripts/test_phase1.py
+      - name: Types (pyright)
+        run: pyright
+
+      - name: Tests (pytest — golden eval + interface)
+        run: pytest

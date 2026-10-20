@@ -65,7 +65,7 @@ def resolve_all(handles) -> list[str]:
     """Resolve a list/comma-string of handles to a de-duplicated principal list,
     preserving first-seen order."""
     if isinstance(handles, str):
-        handles = [p for p in handles.split(",")]
+        handles = list(handles.split(","))
     out: list[str] = []
     for h in handles:
         r = resolve(h)

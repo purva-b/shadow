@@ -19,7 +19,7 @@ exists; this is the path every NEW connector uses.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from connectors.base import SourceRecord
 
@@ -104,7 +104,7 @@ def ingest_record(record: SourceRecord, store=None) -> dict:
     if record.kind in ("meeting", "event"):
         steps.append({"step": "scribe", "note": f"note for {record.title}"})
         steps.append({"step": "librarian_decision",
-                      "checked_on": datetime.now(timezone.utc).strftime("%Y-%m-%d")})
+                      "checked_on": datetime.now(UTC).strftime("%Y-%m-%d")})
 
     steps.append({"step": "cartographer", "people": record.people})
 

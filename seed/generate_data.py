@@ -9,7 +9,6 @@ Run:  python seed/generate_data.py
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -201,7 +200,7 @@ Attendees: Dana Kim, Priya Nair, Sam Ortiz, Marcus Lee
            "Standup where the retry change was PAUSED pending the idempotency "
            "key design; Priya owns follow-up. PAY-482 filed."))
 
-    w("Meetings/2026-10-10-payments-standup.txt", f"""
+    w("Meetings/2026-10-10-payments-standup.txt", """
 Payments Standup — 2026-10-10 10:00
 Host: Dana Kim
 Attendees: Dana Kim, Priya Nair, Sam Ortiz
@@ -226,7 +225,7 @@ Attendees: Dana Kim, Priya Nair, Sam Ortiz
 # Restricted + Quarantine
 # --------------------------------------------------------------------------- #
 def gen_restricted():
-    w("Restricted/2026-10-14-design-review.txt", f"""
+    w("Restricted/2026-10-14-design-review.txt", """
 Design Review — Gateway Vendor — 2026-10-14 14:00
 Host: Dana Kim
 Attendees: Dana Kim, Priya Nair  (RESTRICTED)
@@ -246,7 +245,7 @@ Attendees: Dana Kim, Priya Nair  (RESTRICTED)
 
 
 def gen_quarantine():
-    w("Quarantine/2026-10-15-dana-priya-1on1.txt", f"""
+    w("Quarantine/2026-10-15-dana-priya-1on1.txt", """
 1:1 — Dana / Priya — 2026-10-15  (HR / CONFIDENTIAL)
 [notes contain performance-review feedback — not for team consumption]
 """,
@@ -276,7 +275,7 @@ def gen_slack():
     w("Slack/payments-general-2026-10-13.md", """
 # #payments-general — 2026-10-13
 
-**Sam** 09:12 — standup moved? 
+**Sam** 09:12 — standup moved?
 **Dana** 09:13 — no, normal time.
 **Priya** 15:40 — draft PR #1184 for idempotency keys is up, not ready to merge.
 Review welcome on the header approach.
@@ -634,7 +633,7 @@ timeouts (PAY-523).
 
 
 def gen_more_meetings():
-    w("Meetings/2026-10-06-payments-standup.txt", f"""
+    w("Meetings/2026-10-06-payments-standup.txt", """
 Payments Standup — 2026-10-06 10:00
 Host: Dana Kim
 Attendees: Dana Kim, Priya Nair, Sam Ortiz
@@ -655,7 +654,7 @@ Attendees: Dana Kim, Priya Nair, Sam Ortiz
 
 
 def gen_more_slack():
-    w("Slack/ledger-2026-10-06.md", f"""
+    w("Slack/ledger-2026-10-06.md", """
 # #payments-ledger — 2026-10-06
 
 **Priya** 11:02 — #1190 is merged, ledger webhook is at-least-once now with a DLQ.
@@ -666,7 +665,7 @@ def gen_more_slack():
            ["ledger"], "PAY-501", [PRIYA, SAM, DANA],
            "Ledger channel: PR #1190 merged, PAY-501 closed, watch DLQ depth."))
 
-    w("Slack/onboarding-2026-10-11.md", f"""
+    w("Slack/onboarding-2026-10-11.md", """
 # #payments-onboarding — 2026-10-11
 
 **Nina** 09:00 — welcome Alex! I'm your onboarding buddy. Ping me anytime.
@@ -682,7 +681,7 @@ pair with you on your first issue.
 
 def gen_more_decisions():
     # a DECIDED + confirmed decision (checkout) -> green in the table
-    w("Memory/Decisions/checkout-async-capture.md", f"""
+    w("Memory/Decisions/checkout-async-capture.md", """
 # Decision — Checkout async capture behind a flag
 
 **Decision:** Ship checkout async capture behind the `checkout_async_capture`
@@ -709,7 +708,7 @@ raises the pool; decided to roll out behind a flag at 50% before going to 100%.
       })
 
     # a PROPOSED decision (ledger DLQ alerting) -> amber in the table
-    w("Memory/Decisions/ledger-dlq-alerting.md", f"""
+    w("Memory/Decisions/ledger-dlq-alerting.md", """
 # Decision — Alert on ledger dead-letter-queue depth
 
 **Decision:** Add paging alert when the ledger DLQ depth exceeds 100 for 5
@@ -772,7 +771,7 @@ def gen_more_restricted():
     a budget doc on checkout that the asker cannot read, while PUBLIC checkout
     sources (PAY-512, PR #1201) remain readable — so an answer about checkout
     is partial: real public citations + a 'one source withheld' note."""
-    w("Restricted/2026-10-05-checkout-budget.txt", f"""
+    w("Restricted/2026-10-05-checkout-budget.txt", """
 Checkout Spend Review — 2026-10-05 15:00
 Host: Dana Kim
 Attendees: Dana Kim, Jordan Blake  (RESTRICTED — budget)
@@ -984,7 +983,7 @@ and operational notes. Reviewed and approved by the owning team.
 # Live demo file (uploaded DURING the demo, not by setup)
 # --------------------------------------------------------------------------- #
 def gen_live():
-    w("2026-10-17-payments-standup.txt", f"""
+    w("2026-10-17-payments-standup.txt", """
 Payments Standup — 2026-10-17 10:00
 Host: Dana Kim
 Attendees: Dana Kim, Priya Nair, Sam Ortiz, Alex Rivera

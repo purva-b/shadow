@@ -14,7 +14,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from box_sdk_gen import BoxClient, BoxCCGAuth, CCGConfig
+from box_sdk_gen import BoxCCGAuth, BoxClient, CCGConfig
 
 try:  # load .env for local dev; never committed
     from dotenv import load_dotenv

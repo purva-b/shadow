@@ -414,8 +414,8 @@ def answer(user_id: str, question: str, context: list | None = None) -> dict[str
     if os.environ.get("SHADOW_AGENTIC", "").lower() not in ("1", "true", "yes"):
         return base
     try:
-        from .tools_strands import ANSWER_TOOLS, set_actor
         from .common import strands_agent
+        from .tools_strands import ANSWER_TOOLS, set_actor
 
         set_actor(user_id)
         agent = strands_agent(system=ANSWER_SYSTEM, tools=ANSWER_TOOLS)
@@ -473,7 +473,7 @@ def _answer_pipeline(user_id: str, question: str,
     # shares keywords with the question — so an on-topic issue (PAY-512 for a
     # checkout question) beats an off-topic same-type one (PAY-470 CSS noise).
     order = {"issue": 0, "doc": 1, "pr": 2, "meeting": 3, "slack": 4, "org": 5}
-    qwords = {w for w in re.findall(r"[a-z]{4,}", question.lower())}
+    qwords = set(re.findall(r"[a-z]{4,}", question.lower()))
     want_comps = set(components or [])
     ranked = []
     for r in items:

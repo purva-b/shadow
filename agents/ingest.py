@@ -17,14 +17,14 @@ import json
 import os
 import re
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import requests
 
 from shadow_box import tools as T
 
 from .activity import log_activity
-from .common import bedrock_json, enterprise_scope, ids
+from .common import bedrock_json, ids
 
 EMAIL = "{}@payments.example".format
 NAME_TO_EMAIL = {
@@ -217,7 +217,7 @@ def librarian_decision(file_id: str, text: str, md: dict) -> dict:
 
     # version the decision file + update metadata
     new_status = verdict.get("new_status", "decided")
-    decided_on = (md.get("occurredOn", "") or datetime.now(timezone.utc).strftime("%Y-%m-%d"))[:10]
+    decided_on = (md.get("occurredOn", "") or datetime.now(UTC).strftime("%Y-%m-%d"))[:10]
     confidence = verdict.get("confidence", "medium")
     confirmed = "pending" if confidence != "high" else "yes"
     new_decision = verdict.get("decision", current.get("decision", ""))

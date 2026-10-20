@@ -20,8 +20,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
 
-from shadow_box.client import get_service_client  # noqa: E402
 from shadow_box import tools as T  # noqa: E402
+from shadow_box.client import get_service_client  # noqa: E402
 
 DATA = HERE / "data"
 IDS_PATH = HERE / "ids.json"
@@ -132,7 +132,7 @@ def ensure_app_users() -> dict[str, str]:
                             headers=hdr(), timeout=30).json().get("entries", [])
     by_name = {u["name"]: u["id"] for u in existing}
     out: dict[str, str] = {}
-    for name, login in APP_USERS:
+    for name, _login in APP_USERS:
         if name in by_name:
             out[name] = by_name[name]
             print(f"  app user {name} exists ({by_name[name]})")

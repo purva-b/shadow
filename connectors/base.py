@@ -10,9 +10,10 @@ See ARCHITECTURE.md for the full design.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterable, Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
 Visibility = Literal["public", "internal", "restricted"]
 Kind = Literal["meeting", "chat", "issue", "pr", "doc", "event", "org"]
@@ -105,4 +106,16 @@ class Connector(Protocol):
 
     def subscribe(self) -> WebhookSpec | None:
         """Optional push registration; return None for poll-only connectors."""
+        ...
+
+
+@runtime_checkable
+class Searchable(Protocol):
+    """Optional capability: a connector that can use its source's OWN search API
+    (GitHub issue search, Slack search.messages, Confluence CQL). Not every
+    connector implements it (Box does not), so it is a SEPARATE protocol — the
+    base Connector contract stays satisfiable without a native search. Callers
+    check isinstance(conn, Searchable) before calling .search()."""
+
+    def search(self, query: str, limit: int = 8) -> list[SourceRecord]:
         ...

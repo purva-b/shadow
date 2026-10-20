@@ -49,7 +49,7 @@ def _load_cache() -> dict:
             _mem = json.loads(_cache_path().read_text()) if _cache_path().exists() else {}
         except Exception:
             _mem = {}
-    return _mem
+    return _mem or {}
 
 
 def _save_cache() -> None:
@@ -90,7 +90,7 @@ def embed(text: str) -> list[float] | None:
 def cosine(a: list[float], b: list[float]) -> float:
     if not a or not b or len(a) != len(b):
         return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
     return dot / (na * nb) if na and nb else 0.0

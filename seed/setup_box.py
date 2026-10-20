@@ -137,6 +137,8 @@ def ensure_templates():
             {"key": "active", "type": "enum", "options": opts(["yes", "no"])},
             {"key": "expertise", "type": "multiSelect", "options": opts(COMPONENTS)},
             {"key": "lastActiveOn", "type": "date"},
+            {"key": "movedTo", "type": "string"},
+            {"key": "movedOn", "type": "date"},
         ],
         # the agents' shared blackboard + idempotency key. `state` tracks a file
         # through the ingest pipeline; `processed_version` is the Box file

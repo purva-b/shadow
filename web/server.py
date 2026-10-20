@@ -40,13 +40,44 @@ USERS = IDS["users"]
 FOLDERS = IDS["folders"]
 FILE_IDS = IDS["file_ids"]
 
-# user display metadata for the sidebar
-USER_META = {
-    "Alex Rivera": {"subtitle": "New hire · day 6", "initials": "AR"},
-    "Priya Nair": {"subtitle": "Senior engineer", "initials": "PN"},
-    "Dana Kim": {"subtitle": "Engineering manager", "initials": "DK"},
-}
-SWITCHABLE = ["Alex Rivera", "Priya Nair", "Dana Kim"]
+# Sidebar display metadata is DERIVED, not hardcoded: initials from the name,
+# subtitle from the person's role on their Box people-card (cached). The
+# switchable roster is every seeded App User, so a different tenant's users
+# appear automatically.
+def _initials(name: str) -> str:
+    parts = [p for p in (name or "").split() if p]
+    return "".join(p[0].upper() for p in parts[:2]) or "?"
+
+
+_SUBTITLE_CACHE: dict[str, str] = {}
+
+
+def _subtitle_for(name: str) -> str:
+    """Role text from the person's shadowPerson card; '' if unavailable.
+    Cached so the sidebar stays cheap."""
+    if name in _SUBTITLE_CACHE:
+        return _SUBTITLE_CACHE[name]
+    sub = ""
+    try:
+        from agents.answer import _people_cards
+
+        for c in _people_cards():
+            if c.get("name") == name:
+                role = c.get("role", "")
+                team = c.get("team", "")
+                sub = f"{role} · {team}" if role and team else (role or team)
+                break
+    except Exception:
+        sub = ""
+    _SUBTITLE_CACHE[name] = sub
+    return sub
+
+
+def _user_meta(name: str) -> dict:
+    return {"subtitle": _subtitle_for(name), "initials": _initials(name)}
+
+
+SWITCHABLE = list(USERS.keys())
 
 app = FastAPI(title="Shadow")
 
@@ -94,9 +125,9 @@ def me(request: Request):
         "logged_in": bool(uid),
         "name": name or None,
         "user_id": uid,
-        "meta": USER_META.get(name, {}),
+        "meta": _user_meta(name) if name else {},
         # dev-login roster (only meaningful in dev mode)
-        "options": [{"name": n, "user_id": _uid(n), **USER_META.get(n, {})}
+        "options": [{"name": n, "user_id": _uid(n), **_user_meta(n)}
                     for n in SWITCHABLE],
     }
 
@@ -118,7 +149,7 @@ async def login(req: Request, response: Response):
     uid = _uid(name)
     response.set_cookie(COOKIE, sign(str(uid)), httponly=True, samesite="lax")
     return {"logged_in": True, "name": name, "user_id": uid,
-            "meta": USER_META.get(name, {})}
+            "meta": _user_meta(name)}
 
 
 @app.post("/api/logout")
@@ -204,10 +235,19 @@ async def ask(req: Request):
 
 def _principal_for(user_id: str) -> str:
     """Map the acting-as Box App User id -> that person's email, so the identity
-    resolver can canonicalize it for connector ACL checks."""
+    resolver can canonicalize it for connector ACL checks. The email domain
+    comes from workspace config, not a hardcoded 'payments.example'."""
     name = next((n for n, uid in USERS.items() if str(uid) == str(user_id)), "")
     first = (name or "").split()[0].lower() if name else ""
-    return f"{first}@payments.example" if first else name
+    if not first:
+        return name
+    try:
+        from core import taxonomy
+
+        domain = taxonomy.canonical_domain() or "example.com"
+    except Exception:
+        domain = "example.com"
+    return f"{first}@{domain}"
 
 
 @app.post("/api/sync/{connector}")
@@ -363,7 +403,7 @@ def simulate_confirm():
         return JSONResponse({"error": "simulate disabled (set SHADOW_DEV=1)"},
                             status_code=404)
     dec = FILE_IDS["Memory/Decisions/retry-idempotency-keys.md"]
-    dana = USERS["Dana Kim"]
+    dana = next(iter(USERS.values()))  # dev-sim fallback assignee
     closed = 0
     try:
         for t in T.list_task_assignments(dec):

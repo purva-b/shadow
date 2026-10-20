@@ -16,15 +16,15 @@ from .store import store as _default_store
 def _components_from_records(records) -> list[str]:
     """Union of components across the recalled records, in a stable priority
     order so who-to-ask resolves the primary owner (same order the Box pipeline
-    uses)."""
-    _PRIO = {"retry-service": 0, "gateway-client": 1, "ledger": 2,
-             "payments-api": 3, "checkout": 4}
+    uses — both read config/workspace.yaml taxonomy)."""
+    from . import taxonomy
+
     comps: list[str] = []
     for r in records:
         for c in r.components:
             if c not in comps:
                 comps.append(c)
-    return sorted(comps, key=lambda c: _PRIO.get(c, 9))
+    return taxonomy.sort_by_priority(comps)
 
 
 def _enrich_structured(readable, principal):

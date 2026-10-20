@@ -27,6 +27,7 @@ core/notify.py
 core/retrieve.py
 core/store.py
 core/sync.py
+core/taxonomy.py
 core/tools_connectors.py
 core/wiring.py
 shadow.egg-info/PKG-INFO
@@ -42,6 +43,7 @@ tests/test_harnesses.py
 tests/test_ingest_idempotency.py
 tests/test_metadata.py
 tests/test_privacy.py
+tests/test_tenant_agnostic.py
 web/__init__.py
 web/auth.py
 web/server.py

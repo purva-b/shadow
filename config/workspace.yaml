@@ -9,6 +9,25 @@ components:
   - gateway-client
   - checkout
 
+# Taxonomy maps free-text question words to components, and ranks components so
+# who-to-ask resolves the PRIMARY owner first. Workspace-defined, not code.
+# `keywords`: substring (lowercased) -> component. `priority`: lower = first.
+taxonomy:
+  keywords:
+    retry: retry-service
+    retries: retry-service
+    idempoten: retry-service
+    gateway: gateway-client
+    ledger: ledger
+    checkout: checkout
+    payment: payments-api
+  priority:
+    - retry-service
+    - gateway-client
+    - ledger
+    - payments-api
+    - checkout
+
 enabled_connectors:
   - box
   - github

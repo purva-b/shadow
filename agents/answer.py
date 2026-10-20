@@ -19,11 +19,6 @@ from .activity import log_activity
 from .common import bedrock_complete, enterprise_scope, ids, unwrap_metadata
 
 ISSUE_RE = re.compile(r"\bPAY-\d+\b", re.I)
-COMPONENT_WORDS = {
-    "retry": "retry-service", "retries": "retry-service", "idempoten": "retry-service",
-    "gateway": "gateway-client", "ledger": "ledger", "checkout": "checkout",
-    "payment": "payments-api",
-}
 
 
 # --------------------------------------------------------------------------- #
@@ -32,12 +27,9 @@ def _root() -> str:
 
 
 def _components_from(question: str) -> list[str]:
-    q = question.lower()
-    found = []
-    for frag, comp in COMPONENT_WORDS.items():
-        if frag in q and comp not in found:
-            found.append(comp)
-    return found
+    from core import taxonomy
+
+    return taxonomy.components_from(question)
 
 
 _PC_CACHE = {"t": 0.0, "v": None}
@@ -266,20 +258,33 @@ def _build_citations(items: list[dict], user_id: str, limit: int = 5) -> list[di
     return cits
 
 
+def _seniority_rank(role: str) -> int:
+    """Lower = more senior. Derived from the role TITLE, not a name list, so it
+    works for any team. Ties broken later by expertise-match count."""
+    r = (role or "").lower()
+    if "manager" in r or "director" in r or "vp" in r or "head" in r:
+        return 0
+    if "staff" in r or "principal" in r or "lead" in r:
+        return 1
+    if "senior" in r or "sr" in r:
+        return 2
+    return 3
+
+
 def _who_to_ask(components: list[str], cards: list[dict], org: dict,
                 cited_people: str) -> dict | None:
     # Resolve in component PRIORITY order: the first (highest-priority) component
     # with an active owner wins. `components` arrives already sorted so the
-    # primary component (e.g. retry-service for PAY-482) is first.
+    # primary component is first.
     #
-    # Among owners of the SAME component, prefer the hero owners (the originally
-    # named Payments folks) over the bulk filler engineers — the hero data is
-    # what the demo's answers should route to.
-    HERO = ["Priya Nair", "Sam Ortiz", "Nina Patel", "Dana Kim"]
-    hero_rank = {n: i for i, n in enumerate(HERO)}
+    # Among owners of the SAME component, rank by DATA — expertise-match count
+    # (more of this question's components owned = better), then seniority from
+    # the role title. No hardcoded roster of names.
+    comp_set = set(components or [])
 
-    def rank(c):
-        return hero_rank.get(c.get("name", ""), 99)
+    def rank(c: dict) -> tuple[int, int]:
+        overlap = len(set(c.get("expertise") or []) & comp_set)
+        return (-overlap, _seniority_rank(c.get("role", "")))
 
     active = [c for c in cards if c.get("active") == "yes"]
     best = None
@@ -290,20 +295,19 @@ def _who_to_ask(components: list[str], cards: list[dict], org: dict,
             best = owners[0]
             break
     if best is None:
-        # manager fallback
-        for c in cards:
-            if c.get("role", "").lower().startswith("engineering manager"):
+        # manager fallback — by role title, not name
+        for c in active or cards:
+            if "manager" in c.get("role", "").lower():
                 best = c
                 break
     if best is None:
         return None
     reason = f"Owns {', '.join(best.get('expertise') or [])}." if best.get("expertise") else \
              f"{best.get('role','')} on the {best.get('team','')} team."
-    # moved note: a cited author who is inactive / off Payments AND whose
-    # expertise overlaps THIS question's components — so it fires on PAY-482
-    # (Marcus owned retry/gateway) but not on an unrelated ledger question.
+    # moved note: a cited author who is inactive AND whose expertise overlaps
+    # THIS question's components. The move date + destination come from the
+    # card's own metadata (movedOn / movedTo) — no literal date in code.
     moved_note = None
-    comp_set = set(components or [])
     for c in cards:
         if c.get("active") != "no":
             continue
@@ -311,8 +315,11 @@ def _who_to_ask(components: list[str], cards: list[dict], org: dict,
             continue
         if comp_set and not (set(c.get("expertise") or []) & comp_set):
             continue
+        dest = c.get("movedTo") or "another team"
+        when = (c.get("movedOn") or "")[:10]
+        when_phrase = f" on {when}" if when else ""
         moved_note = (f"{c.get('name')} wrote earlier material but moved to the "
-                      f"{c.get('team')} team on Sept 22.")
+                      f"{dest} team{when_phrase}.")
         break
     return {
         "name": best.get("name"),
@@ -541,9 +548,19 @@ def _answer_pipeline(user_id: str, question: str,
     # plainly — never fall through to an unrelated decision / who-to-ask. This
     # also covers HR-quarantined topics (1:1s) and out-of-scope questions.
     if not cits:
+        mgr = ""
+        try:
+            for c in _people_cards():
+                if "manager" in c.get("role", "").lower() and c.get("active") == "yes":
+                    mgr = c.get("name", "")
+                    break
+        except Exception:
+            mgr = ""
+        ask_line = f"Try rephrasing, or ask your manager {mgr}." if mgr else \
+            "Try rephrasing, or ask your team lead."
         note = ("I don't have anything on that in the team's memory — it may be "
                 "outside what I've shadowed, or in a space your Box access doesn't "
-                "include. Try rephrasing, or ask your manager Dana Kim.")
+                "include. " + ask_line)
         log_activity("Answer", f"No readable match for user {user_id}", "", "no-match")
         return {
             "answer_markdown": note,
@@ -627,6 +644,6 @@ if __name__ == "__main__":  # quick manual check
     import json
     import sys
 
-    uid = ids()["users"]["Alex Rivera"]
+    uid = next(iter(ids()["users"].values()))
     q = sys.argv[1] if len(sys.argv) > 1 else "Where do I start on PAY-482?"
     print(json.dumps(answer(uid, q), indent=2))

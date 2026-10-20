@@ -5,7 +5,7 @@ ingest(file_id) orchestrates:
   2. scribe_note         — meetings: write a structured note to Memory/Meeting Notes
   3. librarian_decision  — detect decision status change; version the decision file;
                            if confidence < high, set confirmed=pending and create a
-                           Box task for the meeting host (Dana)
+                           Box task for the meeting host
   4. cartographer_update — refresh people cards for attendees
 
 Box AI extract_structured is used when available; otherwise Bedrock extracts
@@ -24,17 +24,21 @@ import requests
 from shadow_box import tools as T
 
 from .activity import log_activity
-from .common import bedrock_json, ids
+from .common import bedrock_json, enterprise_scope, ids
 
-EMAIL = "{}@payments.example".format
-NAME_TO_EMAIL = {
-    "dana kim": EMAIL("dana"), "dana": EMAIL("dana"),
-    "priya nair": EMAIL("priya"), "priya": EMAIL("priya"),
-    "sam ortiz": EMAIL("sam"), "sam": EMAIL("sam"),
-    "marcus lee": EMAIL("marcus"), "marcus": EMAIL("marcus"),
-    "alex rivera": EMAIL("alex"), "alex": EMAIL("alex"),
-}
-COMPONENTS = ["retry-service", "payments-api", "ledger", "gateway-client", "checkout"]
+
+def _components() -> list[str]:
+    from core import taxonomy
+
+    return taxonomy.components()
+
+
+def _md_from_listing(entry: dict, template: str) -> dict:
+    """Inline template metadata from a folder_items entry (no extra HTTP call)."""
+    md = entry.get("metadata") or {}
+    scoped = md.get(enterprise_scope()) or {}
+    inst = scoped.get(template) or {}
+    return {k: v for k, v in inst.items() if not k.startswith("$")}
 
 
 def _download_text(file_id: str) -> str:
@@ -99,12 +103,15 @@ def _extract_metadata(file_id: str, text: str) -> dict:
     except Exception:
         pass
     # Bedrock extraction from text
+    from core import taxonomy
+
+    _domain = taxonomy.canonical_domain() or "example.com"
     prompt = (
         "Extract metadata from this team source file as JSON with keys: "
         "sourceType (one of meeting,slack,issue,pr,doc,org), title, occurredOn "
         "(YYYY-MM-DD), components (subset of "
-        f"{COMPONENTS}), issueIds (comma string like PAY-482), people "
-        "(comma emails firstname@payments.example), summary (one sentence), "
+        f"{_components()}), issueIds (comma string like PAY-482), people "
+        f"(comma emails firstname@{_domain}), summary (one sentence), "
         "sensitivity (normal|restricted|hr). Content:\n\n" + text[:4000]
     )
     try:
@@ -260,7 +267,7 @@ def librarian_decision(file_id: str, text: str, md: dict) -> dict:
     task = None
     if confirmed == "pending":
         host_email = _meeting_host_email(text, md)
-        host_name = next((n for n, e in NAME_TO_EMAIL.items() if e == host_email), "dana kim")
+        host_name = host_email.split("@")[0].replace(".", " ").title() if host_email else "the host"
         host_id = _user_id_for_email(host_email)
         if host_id:
             task = T.create_task_and_assign(
@@ -276,18 +283,22 @@ def librarian_decision(file_id: str, text: str, md: dict) -> dict:
 def _meeting_host_email(text: str, md: dict) -> str:
     m = re.search(r"Host:\s*([A-Za-z ]+)", text)
     if m:
-        return NAME_TO_EMAIL.get(m.group(1).strip().lower(), EMAIL("dana"))
-    return EMAIL("dana")
+        from core import identity
+
+        resolved = identity.resolve(m.group(1).strip())
+        if resolved and "@" in resolved:
+            return resolved
+    # no parseable/known host -> let the caller's user-id lookup degrade
+    return ""
 
 
 def _user_id_for_email(email: str) -> str | None:
-    name = next((n.title() for n, e in NAME_TO_EMAIL.items()
-                 if e == email and " " in n), None)
+    """Map a principal/email to a Box App User id by matching the display names
+    in ids()['users'] — first by first-name prefix, with no hardcoded roster."""
+    if not email:
+        return None
     users = ids()["users"]
-    if name and name in users:
-        return users[name]
-    # map by first name
-    first = email.split("@")[0]
+    first = email.split("@")[0].split(".")[0].lower()
     for full, uid in users.items():
         if full.lower().startswith(first):
             return uid
@@ -298,22 +309,25 @@ def _user_id_for_email(email: str) -> str | None:
 # 4. Cartographer — people cards
 # --------------------------------------------------------------------------- #
 def cartographer_update(md: dict) -> dict:
+    from core import identity
+
     people = [p.strip() for p in (md.get("people", "") or "").split(",") if p.strip()]
+    principals = {identity.resolve(p) for p in people if p}
     date = (md.get("occurredOn", "") or "")[:10]
     folder = ids()["folders"]["Memory/People"]
     updated = []
-    cards = {it["name"]: it for it in T.folder_items(folder) if it["type"] == "file"}
-    name_by_email = {e: n for n, e in NAME_TO_EMAIL.items() if " " in n}
-    for email in people:
-        full = name_by_email.get(email)
-        if not full:
+    # Match attendees to existing cards by the card's OWN email metadata, so no
+    # name<->email roster is hardcoded. One listing read, inline metadata.
+    for it in T.folder_items(folder, md_template="shadowPerson"):
+        if it.get("type") != "file":
             continue
-        slug = full.replace(" ", "-") + ".md"
-        card = cards.get(slug)
-        if not card:
+        card_md = _md_from_listing(it, "shadowPerson")
+        card_email = (card_md.get("email") or "").strip()
+        if not card_email:
             continue
-        T.apply_metadata(card["id"], "shadowPerson", {"lastActiveOn": date})
-        updated.append(full.title())
+        if card_email in principals or identity.resolve(card_email) in principals:
+            T.apply_metadata(it["id"], "shadowPerson", {"lastActiveOn": date})
+            updated.append(card_md.get("name") or card_email)
     if updated:
         log_activity("Cartographer", f"Updated activity for {', '.join(updated)}", "",
                      f"lastActiveOn={date}")

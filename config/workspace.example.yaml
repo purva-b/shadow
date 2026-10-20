@@ -15,6 +15,25 @@ components:
   - gateway-client
   - checkout
 
+# Taxonomy routes question words to components and ranks them for who-to-ask.
+# A different team edits this (no code change) to re-route questions.
+#   keywords: substring in the question (lowercased) -> component
+#   priority: resolution order, lower = tried first (primary owner wins)
+taxonomy:
+  keywords:
+    retry: retry-service
+    idempoten: retry-service
+    gateway: gateway-client
+    ledger: ledger
+    checkout: checkout
+    payment: payments-api
+  priority:
+    - retry-service
+    - gateway-client
+    - ledger
+    - payments-api
+    - checkout
+
 # Which connectors are live for this workspace. A connector not listed here is
 # never loaded, even if its file exists. Adding a source = write the connector
 # file + add its name here.

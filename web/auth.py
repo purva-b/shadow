@@ -26,7 +26,22 @@ import os
 from fastapi import HTTPException, Request
 
 COOKIE = "shadow_session"
-_SECRET = os.environ.get("SHADOW_SESSION_SECRET", "dev-only-insecure-secret").encode()
+
+
+def _secret() -> bytes:
+    """The HMAC secret, resolved through core.config so a deployment can supply
+    it from Secrets Manager (SHADOW_SECRETS_ARN); falls back to the env var and
+    then a dev default for local runs."""
+    try:
+        from core.config import get
+
+        val = get("SHADOW_SESSION_SECRET")
+    except Exception:
+        val = os.environ.get("SHADOW_SESSION_SECRET", "")
+    return (val or "dev-only-insecure-secret").encode()
+
+
+_SECRET = _secret()
 
 
 def dev_mode() -> bool:

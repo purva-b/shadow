@@ -80,17 +80,33 @@ three connectors and deploying.
 
 ## What's left (the finish list)
 
+Weeks 4-6 of the build closed most of this. Current state:
+
 1. **Live-test Slack, Confluence, Calendar** against real tenants (need tokens).
-   The code paths are real but unexercised.
-2. **Deploy** — container to App Runner/ECS with a public URL; deploy the
-   DynamoDB activity table (kill the JSONL fallback).
-3. **Durable store at scale.** The record store is a JSON file today (explicitly
-   a placeholder). Swap to pgvector / OpenSearch behind the same `put/all` API
-   for real volume and concurrency.
-4. **Secrets + OAuth.** Per-connector tokens belong in Secrets Manager with
-   refresh, not `.env`.
+   The code paths are real but unexercised. **Still open** — blocked on tokens,
+   not code. The agent-path CI job now at least guards that the agentic layer
+   over these connectors keeps importing and wiring up.
+2. **Deploy** — **DONE (Week 5).** Single-container `Dockerfile` (API + built UI)
+   with a `/health` probe and a `deploy/entrypoint.py` that idempotently
+   provisions the DynamoDB activity table on first boot; `deploy/README.md` +
+   `deploy/apprunner.yaml` give the ECR→App Runner path (ECS notes included).
+   The JSONL activity fallback is kept on purpose as honest degradation.
+   Running `docker build`/push/deploy needs a Docker daemon (not available in
+   the build sandbox) and is the one manual step left to get a live URL.
+3. **Durable store at scale** — **SEAM DONE (Week 6).** `core/store.py` now has a
+   `StoreBackend` protocol; `RecordStore` delegates to it, selected by
+   `SHADOW_STORE_BACKEND`. The default `JsonlBackend` runs anywhere; a
+   `PgVectorBackend` documents the exact DDL + vector-recall queries and is a
+   clear-erroring stub until `DATABASE_URL` + psycopg are provisioned. Swapping
+   backends touches no call site. Implementing the pgvector driver is the
+   remaining work; the abstraction is in place.
+4. **Secrets + OAuth** — **SEAM DONE (Week 6).** `core/config.py` resolves every
+   secret as env-override → Secrets Manager (`SHADOW_SECRETS_ARN`) → `.env`,
+   fail-open. `web/auth.py` reads the session secret through it. `oauth_enabled()`
+   is the flag the login flow branches on when Box OAuth replaces the dev login;
+   the OAuth dance itself is the remaining work (the seam is wired).
 5. **Real notification delivery.** The detection + targeting is done; register a
-   Slack/email sender for actual push.
+   Slack/email sender for actual push. **Still open.**
 
 ---
 

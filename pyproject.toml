@@ -21,6 +21,9 @@ dependencies = [
 [project.optional-dependencies]
 # agent orchestration + deploy (not needed for the offline test lane)
 agents = ["strands-agents", "bedrock-agentcore", "bedrock-agentcore-starter-toolkit"]
+# durable store at scale — Postgres + pgvector. Only needed when
+# SHADOW_STORE_BACKEND=pgvector; the default jsonl backend needs none of this.
+pgvector = ["psycopg[binary]>=3.1", "pgvector>=0.2"]
 dev = ["ruff", "pyright", "pytest", "httpx"]
 
 [tool.setuptools]

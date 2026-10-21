@@ -66,11 +66,22 @@ def recall(question: str, principal: str, store, context: list | None = None,
     qwords = set(re.findall(r"[a-z]{4,}", text.lower()))
     components = set(qwords)
 
-    candidates = store.all()
-    if sources:
-        candidates = [r for r in candidates if r.source in sources]
-
     qvec = embeddings.embed(text) if embeddings.available() else None
+
+    # Candidate selection. When the backend can rank vectors itself (pgvector),
+    # push nearest-neighbour recall into the engine — Postgres returns the top-N
+    # by cosine distance instead of us scanning every record in Python. We still
+    # re-score in Python below to apply the exact issue-id / component boosts and
+    # the relevance floor, but only over the small candidate set the DB returned.
+    # When the backend cannot (jsonl, the demo default) OR embeddings are
+    # unavailable, fall back to the full scan.
+    if qvec is not None and store.supports_vector():
+        # over-recall from the DB so the Python re-rank + ACL trim have headroom.
+        candidates = store.vector_recall(qvec, k=limit * 6, sources=sources)
+    else:
+        candidates = store.all()
+        if sources:
+            candidates = [r for r in candidates if r.source in sources]
 
     # Relevance floors so an OFF-TOPIC question returns nothing rather than the
     # least-irrelevant record. Semantic cosine is never exactly 0, so a bare

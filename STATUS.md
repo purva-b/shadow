@@ -93,13 +93,20 @@ Weeks 4-6 of the build closed most of this. Current state:
    The JSONL activity fallback is kept on purpose as honest degradation.
    Running `docker build`/push/deploy needs a Docker daemon (not available in
    the build sandbox) and is the one manual step left to get a live URL.
-3. **Durable store at scale** — **SEAM DONE (Week 6).** `core/store.py` now has a
+3. **Durable store at scale** — **IMPLEMENTED.** `core/store.py` has a
    `StoreBackend` protocol; `RecordStore` delegates to it, selected by
-   `SHADOW_STORE_BACKEND`. The default `JsonlBackend` runs anywhere; a
-   `PgVectorBackend` documents the exact DDL + vector-recall queries and is a
-   clear-erroring stub until `DATABASE_URL` + psycopg are provisioned. Swapping
-   backends touches no call site. Implementing the pgvector driver is the
-   remaining work; the abstraction is in place.
+   `SHADOW_STORE_BACKEND`. The default `JsonlBackend` runs anywhere; the
+   `PgVectorBackend` is a **real** Postgres + pgvector backend: it creates the
+   schema (`vector` extension, `shadow_records` table, ivfflat index)
+   idempotently, upserts records with their Titan embeddings, and runs
+   nearest-neighbour recall **in the DB** (`ORDER BY embedding <=> :q`) rather
+   than scanning every record in Python. `core/retrieve.py` uses that DB-side
+   path automatically when the backend `supports_vector()`, and falls back to
+   the scan otherwise. psycopg is an optional `[pgvector]` extra so the default
+   install and the fast CI lane need no driver. The SQL path (DDL, upsert,
+   ANN query) is covered by hermetic tests via a fake psycopg — no live DB
+   needed. Remaining to go live: point `DATABASE_URL` at a Postgres with
+   pgvector and `pip install -e '.[pgvector]'`.
 4. **Secrets + OAuth** — **SEAM DONE (Week 6).** `core/config.py` resolves every
    secret as env-override → Secrets Manager (`SHADOW_SECRETS_ARN`) → `.env`,
    fail-open. `web/auth.py` reads the session secret through it. `oauth_enabled()`

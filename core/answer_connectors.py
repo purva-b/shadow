@@ -62,6 +62,35 @@ def _enrich_structured(readable, principal):
     return who, decision
 
 
+def _readable_owner(question: str, principal: str) -> dict | None:
+    """Point the asker at a READABLE owner for the topic — derived only from the
+    people cards (which the asker's answer already relies on), NEVER from the
+    restricted record's contents. Prefers an active owner of the question's
+    component; falls back to a manager. Returns None if none is suitable (no
+    hardcoded name). This gives the connector path the same 'ask this readable
+    person instead' pointer the Box pipeline has."""
+    try:
+        from . import structured, taxonomy
+
+        comps = taxonomy.components_from(question)
+        cards = structured.people_cards()
+        active = [c for c in cards if c.get("active") == "yes"]
+        for comp in comps:
+            for c in active:
+                if comp in (c.get("expertise") or []):
+                    return {"name": c.get("name"), "role": c.get("role"),
+                            "reason": "Owns this area and can point you to the "
+                                      "right place.", "moved_note": None}
+        for c in active or cards:
+            if "manager" in (c.get("role", "") or "").lower():
+                return {"name": c.get("name"), "role": c.get("role"),
+                        "reason": "Manages this team and can route your request.",
+                        "moved_note": None}
+    except Exception:
+        pass
+    return None
+
+
 def answer_from_connectors(principal: str, question: str, context=None,
                            store=None, sources=None) -> dict | None:
     """Return a UI answer dict, or None if no connector record is relevant
@@ -72,13 +101,18 @@ def answer_from_connectors(principal: str, question: str, context=None,
     if not got.readable and not got.withheld:
         return None                       # nothing here -> let Box pipeline try
 
-    # FAILURE / PARTIAL: relevant records exist but the asker can read none
+    # FAILURE: relevant records exist but the asker can read NONE — a full
+    # refusal. Point them at a readable owner (parity with the Box pipeline),
+    # derived from people cards, never from the restricted record itself.
     if not got.readable:
+        who = _readable_owner(question, principal)
+        who_line = (f" {who['name']} ({who['role']}) can point you to the right place."
+                    if who and who.get("name") else "")
         note = ("I can't answer that from team memory — the matching source is in "
-                "a restricted space your access doesn't include.")
+                "a restricted space your access doesn't include." + who_line)
         return {
             "answer_markdown": note, "citations": [],
-            "decision_status": None, "who_to_ask": None, "restricted_note": note,
+            "decision_status": None, "who_to_ask": who, "restricted_note": note,
         }
 
     cits = [retrieve.to_citation(r, store) for r in got.readable]

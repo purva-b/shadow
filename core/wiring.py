@@ -17,11 +17,13 @@ from . import acl, identity
 def _box_can_read(external_id: str, principal: str) -> bool:
     """Resolve the principal back to a Box App User id and probe can_read.
     principal is canonical (e.g. priya@payments.example); Box wants the user id.
+    ids come from seed/ids.json (core.structured), not the agents package.
     """
-    from agents.common import ids
     from shadow_box import tools as T
 
-    users = ids().get("users", {})
+    from .structured import _ids
+
+    users = _ids().get("users", {})
     # map canonical principal -> App User id by first-name / email-local match
     local = identity.resolve(principal).split("@")[0].lower()
     uid = None

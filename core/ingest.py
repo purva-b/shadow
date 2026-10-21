@@ -26,7 +26,7 @@ from connectors.base import SourceRecord
 from . import identity
 
 try:
-    from agents.common import bedrock_json
+    from core.llm import bedrock_json
 except Exception:  # pragma: no cover - agents import optional in some contexts
     bedrock_json = None
 

@@ -52,7 +52,7 @@ def answer_agentic(principal: str, question: str, context=None) -> dict | None:
     import concurrent.futures as _fut
 
     try:
-        from agents.common import strands_agent
+        from core.llm import strands_agent
 
         from . import tools_connectors
         from .answer_connectors import answer_from_connectors

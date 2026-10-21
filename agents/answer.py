@@ -13,10 +13,32 @@ import os
 import re
 from typing import Any
 
+# These structured-field helpers moved to core.structured in Week 4 (so core/
+# no longer imports agents.answer). They are re-exported here under their old
+# private names so the Box answer pipeline below — and any caller importing
+# `agents.answer._people_cards` etc. — keeps working unchanged.
+from core.structured import (  # noqa: F401  (re-exported for the pipeline + back-compat)
+    decision_status as _decision_status,
+)
+from core.structured import (
+    decisions as _decisions,
+)
+from core.structured import (
+    md_from_listing as _md_from_listing,
+)
+from core.structured import (
+    org_chart as _org_chart,
+)
+from core.structured import (
+    people_cards as _people_cards,
+)
+from core.structured import (
+    who_to_ask as _who_to_ask,
+)
 from shadow_box import tools as T
 
 from .activity import log_activity
-from .common import bedrock_complete, enterprise_scope, ids, unwrap_metadata
+from .common import bedrock_complete, ids, unwrap_metadata
 
 ISSUE_RE = re.compile(r"\bPAY-\d+\b", re.I)
 
@@ -30,63 +52,6 @@ def _components_from(question: str) -> list[str]:
     from core import taxonomy
 
     return taxonomy.components_from(question)
-
-
-_PC_CACHE = {"t": 0.0, "v": None}
-
-
-def _people_cards() -> list[dict]:
-    """All shadowPerson cards (service account view), read from the People folder.
-    Cached for 60s — the people graph rarely changes within a session, and this
-    is on the hot answer path."""
-    import time as _time
-
-    if _PC_CACHE["v"] is not None and (_time.time() - _PC_CACHE["t"]) < 60:
-        return _PC_CACHE["v"]
-    folder = ids()["folders"].get("Memory/People")
-    out = []
-    if not folder:
-        return out
-    for it in T.folder_items(folder, md_template="shadowPerson"):
-        if it.get("type") != "file":
-            continue
-        md = _md_from_listing(it, "shadowPerson")
-        if not md:
-            continue
-        card = {k: v for k, v in md.items() if not k.startswith("$")}
-        card["_file_id"] = it["id"]
-        card["_name"] = card.get("name")
-        out.append(card)
-    _PC_CACHE["t"] = _time.time()
-    _PC_CACHE["v"] = out
-    return out
-
-
-_ORG_CACHE = {"t": 0.0, "v": None}
-
-
-def _org_chart() -> dict:
-    """The org chart, cached 60s. It was downloaded on EVERY answer (a Box file
-    GET) with a fresh connection; it changes rarely, so cache it and reuse the
-    shared session — one of the per-answer Box round-trips removed on the hot
-    path."""
-    import json
-    import time as _time
-
-    if _ORG_CACHE["v"] is not None and (_time.time() - _ORG_CACHE["t"]) < 60:
-        return _ORG_CACHE["v"]
-    fid = ids()["file_ids"].get("Org/org_chart.json")
-    if not fid:
-        return {}
-    try:
-        r = T._SESSION.get(f"https://api.box.com/2.0/files/{fid}/content",
-                           headers=T._headers(), timeout=30)
-        data = json.loads(r.text)
-    except Exception:
-        data = {}
-    _ORG_CACHE["t"] = _time.time()
-    _ORG_CACHE["v"] = data
-    return data
 
 
 def _matched_items(issue_ids: list[str], components: list[str],
@@ -127,16 +92,6 @@ _SCAN_FOLDERS = ["Sources/Issues", "Sources/PRs", "Sources/Docs",
                  "Sources/Meetings", "Sources/Slack", "Sources/Org"]
 
 
-def _md_from_listing(entry: dict, template: str = "shadowItem") -> dict:
-    """Read a template's metadata from an inline folder_items entry WITHOUT a
-    second HTTP call. folder_items already requests fields=...,metadata, so the
-    values ride along under metadata[enterprise_<id>][template]."""
-    md = entry.get("metadata") or {}
-    scoped = md.get(enterprise_scope()) or {}
-    inst = scoped.get(template) or {}
-    return {k: v for k, v in inst.items() if not k.startswith("$")}
-
-
 def _scan_items_by_component(components: list[str], user_id: str) -> dict[str, dict]:
     """Enumerate source subfolders AS the user and keep files whose shadowItem
     components intersect the wanted set. Uses inline metadata from the listing
@@ -160,32 +115,6 @@ def _scan_items_by_component(components: list[str], user_id: str) -> dict[str, d
             if comps & want:
                 found[it["id"]] = {"id": it["id"], "name": it["name"], "_md": md}
     return found
-
-
-def _decisions(components: list[str], user_id: str) -> list[dict]:
-    """List the Decisions folder and read shadowDecision metadata directly.
-
-    multiSelect fields are not reliably queryable via metadata_queries, so we
-    enumerate the small Decisions folder and filter in code by component.
-    """
-    folder = ids()["folders"].get("Memory/Decisions")
-    if not folder:
-        return []
-    out = []
-    # inline metadata in ONE folder listing (md_template) instead of a
-    # get_metadata round-trip per file — the Decisions folder is small but this
-    # was N+1 Box calls on the hot answer path.
-    for it in T.folder_items(folder, as_user=user_id, md_template="shadowDecision"):
-        if it.get("type") != "file":
-            continue
-        md = _md_from_listing(it, "shadowDecision")
-        if not md:
-            continue
-        comps = md.get("components", []) or []
-        if not components or any(c in comps for c in components):
-            out.append({"id": it["id"], "name": it["name"],
-                        "metadata": {enterprise_scope(): {"shadowDecision": md}}})
-    return out
 
 
 def _restricted_hit(question: str, user_id: str) -> dict | None:
@@ -256,90 +185,6 @@ def _build_citations(items: list[dict], user_id: str, limit: int = 5) -> list[di
             "_people": md.get("people", ""),
         })
     return cits
-
-
-def _seniority_rank(role: str) -> int:
-    """Lower = more senior. Derived from the role TITLE, not a name list, so it
-    works for any team. Ties broken later by expertise-match count."""
-    r = (role or "").lower()
-    if "manager" in r or "director" in r or "vp" in r or "head" in r:
-        return 0
-    if "staff" in r or "principal" in r or "lead" in r:
-        return 1
-    if "senior" in r or "sr" in r:
-        return 2
-    return 3
-
-
-def _who_to_ask(components: list[str], cards: list[dict], org: dict,
-                cited_people: str) -> dict | None:
-    # Resolve in component PRIORITY order: the first (highest-priority) component
-    # with an active owner wins. `components` arrives already sorted so the
-    # primary component is first.
-    #
-    # Among owners of the SAME component, rank by DATA — expertise-match count
-    # (more of this question's components owned = better), then seniority from
-    # the role title. No hardcoded roster of names.
-    comp_set = set(components or [])
-
-    def rank(c: dict) -> tuple[int, int]:
-        overlap = len(set(c.get("expertise") or []) & comp_set)
-        return (-overlap, _seniority_rank(c.get("role", "")))
-
-    active = [c for c in cards if c.get("active") == "yes"]
-    best = None
-    for comp in components:
-        owners = [c for c in active if comp in (c.get("expertise") or [])]
-        if owners:
-            owners.sort(key=rank)
-            best = owners[0]
-            break
-    if best is None:
-        # manager fallback — by role title, not name
-        for c in active or cards:
-            if "manager" in c.get("role", "").lower():
-                best = c
-                break
-    if best is None:
-        return None
-    reason = f"Owns {', '.join(best.get('expertise') or [])}." if best.get("expertise") else \
-             f"{best.get('role','')} on the {best.get('team','')} team."
-    # moved note: a cited author who is inactive AND whose expertise overlaps
-    # THIS question's components. The move date + destination come from the
-    # card's own metadata (movedOn / movedTo) — no literal date in code.
-    moved_note = None
-    for c in cards:
-        if c.get("active") != "no":
-            continue
-        if c.get("email", "") not in (cited_people or ""):
-            continue
-        if comp_set and not (set(c.get("expertise") or []) & comp_set):
-            continue
-        dest = c.get("movedTo") or "another team"
-        when = (c.get("movedOn") or "")[:10]
-        when_phrase = f" on {when}" if when else ""
-        moved_note = (f"{c.get('name')} wrote earlier material but moved to the "
-                      f"{dest} team{when_phrase}.")
-        break
-    return {
-        "name": best.get("name"),
-        "role": best.get("role"),
-        "reason": reason,
-        "moved_note": moved_note,
-    }
-
-
-def _decision_status(decisions: list[dict]) -> dict | None:
-    for r in decisions:
-        d = unwrap_metadata(r, "shadowDecision")
-        if d:
-            return {
-                "decision": d.get("decision", ""),
-                "status": d.get("status", ""),
-                "confirmed": d.get("confirmed", ""),
-                "decidedOn": d.get("decidedOn", "")[:10],
-            }
-    return None
 
 
 def _compose_markdown(question: str, cits: list[dict], decision: dict | None,

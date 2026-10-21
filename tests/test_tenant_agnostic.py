@@ -6,8 +6,9 @@ a pass means nothing in the runtime path is coded to the seeded tenant.
 """
 from __future__ import annotations
 
-from agents.answer import _seniority_rank, _who_to_ask
 from core import taxonomy
+from core.structured import seniority_rank as _seniority_rank
+from core.structured import who_to_ask as _who_to_ask
 
 
 def _card(name, role, expertise, active="yes", email=None, **extra):

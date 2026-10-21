@@ -27,29 +27,36 @@ def _components_from_records(records) -> list[str]:
     return taxonomy.sort_by_priority(comps)
 
 
+def _principal_to_box_uid(principal: str):
+    """Map a canonical principal (e.g. priya@payments.example) back to a Box App
+    User id, for perm-scoped Box reads. ids come from seed/ids.json — no import
+    of the agents package."""
+    from .structured import _ids
+
+    users = _ids().get("users", {})
+    local = principal.split("@")[0].lower()
+    return next((u for n, u in users.items() if n.split()[0].lower() == local), None)
+
+
 def _enrich_structured(readable, principal):
-    """Compute who_to_ask + decision_status from the SHARED Box-backed helpers,
-    so a cross-source answer keeps the same structured fields the Box pipeline
-    produces (fixes the regression where routing Box through the store dropped
-    who-to-ask and the decision chip). Degrades to None if Box is unreachable."""
+    """Compute who_to_ask + decision_status from the SHARED structured helpers
+    (now core.structured, source-agnostic — Week 4 severed the agents.answer
+    import), so a cross-source answer keeps the same structured fields the Box
+    pipeline produces. Degrades to None if Box is unreachable."""
     who = decision = None
     try:
-        from agents import answer as box_answer
-        from agents.common import ids
+        from . import structured
 
         components = _components_from_records(readable)
-        # map the canonical principal back to a Box App User id for perm-scoped reads
-        users = ids().get("users", {})
-        local = principal.split("@")[0].lower()
-        uid = next((u for n, u in users.items() if n.split()[0].lower() == local), None)
+        uid = _principal_to_box_uid(principal)
         if uid is None:
             return None, None
-        cards = box_answer._people_cards()
-        org = box_answer._org_chart()
-        decisions = box_answer._decisions(components, str(uid))
-        decision = box_answer._decision_status(decisions)
+        cards = structured.people_cards()
+        org = structured.org_chart()
+        decs = structured.decisions(components, str(uid))
+        decision = structured.decision_status(decs)
         cited_people = ",".join(p for r in readable for p in r.people)
-        who = box_answer._who_to_ask(components, cards, org, cited_people)
+        who = structured.who_to_ask(components, cards, org, cited_people)
     except Exception:
         pass
     return who, decision

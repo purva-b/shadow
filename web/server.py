@@ -35,10 +35,18 @@ import json  # noqa: E402
 
 from shadow_box import tools as T  # noqa: E402
 
-IDS = json.loads((ROOT / "seed" / "ids.json").read_text())
-USERS = IDS["users"]
-FOLDERS = IDS["folders"]
-FILE_IDS = IDS["file_ids"]
+# ids.json is tenant-specific (gitignored) and written by seed/setup_box.py. It
+# is absent in CI and on a fresh deploy before seeding, so load it tolerantly:
+# the server still imports and /health still answers; Box-backed endpoints
+# degrade honestly until the tenant is seeded (rather than crashing at import).
+_IDS_PATH = ROOT / "seed" / "ids.json"
+try:
+    IDS = json.loads(_IDS_PATH.read_text())
+except (FileNotFoundError, ValueError):
+    IDS = {"users": {}, "folders": {}, "file_ids": {}}
+USERS = IDS.get("users", {})
+FOLDERS = IDS.get("folders", {})
+FILE_IDS = IDS.get("file_ids", {})
 
 # Sidebar display metadata is DERIVED, not hardcoded: initials from the name,
 # subtitle from the person's role on their Box people-card (cached). The
@@ -406,6 +414,8 @@ def activity():
 def decisions():
     folder = FOLDERS.get("Memory/Decisions")
     out = []
+    if not folder:          # unseeded tenant (no ids.json) -> nothing to list
+        return {"rows": out}
     try:
         for it in T.folder_items(folder):
             if it["type"] != "file":

@@ -20,14 +20,15 @@ one remaining cold Box read (`_decisions`). Conclusion: <5s is ACHIEVED when Box
 is healthy; the variance is Box's server-side latency, not our code.
 
 ## Later
-- **Unify `agents/` → `core/`**: two answer paths exist (`agents/answer.py` Box
-  pipeline, `core/answer_connectors.py` connector path, now the default). Fold the
-  Box pipeline's structured-field logic fully into `core/` and retire the
-  duplicate. Belongs with Week 4's answer-agent unification.
-- **Restricted-only refusal messaging on the connector path**: the connector path
-  never leaks (ACL filter blocks unreadable records) and notes a withholding, but
-  it lacks the Box pipeline's explicit "the only source is restricted → full
-  refusal" message. Add when unifying the answer paths.
+- **Unify `agents/` → `core/`**: DONE (Week 4). The Box pipeline's structured
+  logic moved to `core/structured.py` and the reasoning layer to `core/llm.py`;
+  `core/` no longer imports `agents` at all. `agents/answer.py` re-exports for
+  back-compat.
+- **Restricted-only refusal messaging on the connector path**: DONE (Week 4).
+  `core/answer_connectors.py` now gives a full refusal a readable-owner pointer
+  (parity with the Box pipeline), proven leak-free by `tests/test_connector_refusal.py`.
+- **pyright `basic` → `standard`**: DONE (Week 4). Tightened in `pyproject.toml`;
+  it caught a real `log_message` override-signature bug in `agents/app.py`.
 - **Box OAuth**: Week 1 used a dev login only (per owner's call). Real OAuth app +
   session login is still needed; scaffold exists conceptually, not built.
-- **pyright `basic` → `standard`**: tighten once `core/` is fully typed.
+  (Scheduled for Week 6 — the deploy/secrets week.)

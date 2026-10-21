@@ -57,7 +57,7 @@ def _run_local():  # pragma: no cover - local fallback server
             self.end_headers()
             self.wfile.write(body)
 
-        def log_message(self, *a):
+        def log_message(self, format: str, *args) -> None:  # noqa: A002
             pass
 
     port = int(os.environ.get("PORT", "8080"))

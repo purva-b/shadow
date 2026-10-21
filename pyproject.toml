@@ -54,11 +54,12 @@ venvPath = "."
 venv = ".venv"
 include = ["core", "connectors", "shadow_box", "agents", "web"]
 exclude = ["**/__pycache__", ".venv", "web/static-react", "web/ui", "seed/data"]
-# start lenient: the codebase has untyped third-party calls (box-sdk-gen, strands).
-# basic catches real bugs (undefined names, bad attribute access) without drowning
-# in missing-stub noise. Tighten to "standard" once the core is typed.
+# Week 4: tightened to "standard" now that core/ is fully typed and no longer
+# imports agents. Untyped third-party SDKs (box-sdk-gen, strands, boto3) are
+# reached through narrow typed seams; missing-stub reports stay suppressed so
+# standard mode flags real type bugs rather than drowning in stub noise.
+typeCheckingMode = "standard"
 pythonVersion = "3.13"
-typeCheckingMode = "basic"
 reportMissingImports = false
 reportMissingModuleSource = false
 

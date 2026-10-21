@@ -1,0 +1,20 @@
+# keep the build context small and secret-free
+.venv/
+**/__pycache__/
+*.pyc
+web/ui/node_modules/
+web/ui/dist/
+web/static-react/
+.git/
+*.egg-info/
+.env
+.env.*
+seed/ids.json
+web/*.jsonl
+web/embed_cache.json
+web/records_store.jsonl
+.pytest_cache/
+.ruff_cache/
+*.md
+scripts/
+tests/

@@ -1,0 +1,39 @@
+# AWS App Runner service configuration (image-based deploy).
+#
+# Shadow is a single container; App Runner gives it a managed public HTTPS URL,
+# auto-scaling, and a health check with zero load-balancer wiring. Use this when
+# deploying the image from ECR (see deploy/README.md). Secrets (Box creds,
+# Bedrock model id) come from Secrets Manager via the service's instance role —
+# never baked into the image.
+#
+# This file documents the intended runtime; `aws apprunner create-service`
+# (or the console) is driven from deploy/README.md. App Runner's own
+# apprunner.yaml (source-based builds) is a superset of these fields.
+
+version: 1.0
+runtime: docker
+build:
+  # image-based: nothing to build in App Runner; the image is pushed to ECR.
+  commands: {}
+run:
+  command: python deploy/entrypoint.py
+  network:
+    port: 8080
+  env:
+    - name: SHADOW_HOST
+      value: "0.0.0.0"
+    - name: PORT
+      value: "8080"
+    - name: AWS_REGION
+      value: "us-east-1"
+    # Box + Bedrock config injected from Secrets Manager at deploy time:
+    #   BOX_CLIENT_ID, BOX_CLIENT_SECRET, BOX_ENTERPRISE_ID,
+    #   BEDROCK_MODEL_ID, SHADOW_SESSION_SECRET
+  # App Runner polls this path; /health returns 200 when the process is up.
+  health-check:
+    path: /health
+    protocol: HTTP
+    interval: 10
+    timeout: 5
+    healthy-threshold: 1
+    unhealthy-threshold: 3

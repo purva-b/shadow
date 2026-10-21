@@ -81,6 +81,10 @@ SWITCHABLE = list(USERS.keys())
 
 app = FastAPI(title="Shadow")
 
+# the React/TS build dir (web/static-react, produced by `npm run build`).
+# Defined up here so /health and the static mount below share one constant.
+_REACT = Path(__file__).resolve().parent / "static-react"
+
 # register source-specific hooks (e.g. Box live can_read probe for restricted
 # Box records routed through the connector store)
 try:
@@ -94,6 +98,30 @@ except Exception as _e:  # never block startup on wiring
 
 def _uid(name: str) -> str:
     return USERS[name]
+
+
+@app.get("/health")
+def health():
+    """Liveness + readiness probe for App Runner / ALB / ECS health checks.
+    Cheap and dependency-free: it reports process health and whether the
+    optional backends (Strands reasoning, DynamoDB activity) are reachable,
+    without failing the check when they are not (honest degradation)."""
+    strands_ok = False
+    try:
+        from core.llm import STRANDS_AVAILABLE
+
+        strands_ok = bool(STRANDS_AVAILABLE)
+    except Exception:
+        strands_ok = False
+    dynamo_ok = False
+    try:
+        from agents.activity import _table
+
+        dynamo_ok = _table() is not None
+    except Exception:
+        dynamo_ok = False
+    return {"status": "ok", "ui_built": (_REACT / "index.html").exists(),
+            "strands": strands_ok, "dynamodb": dynamo_ok}
 
 
 # --------------------------------------------------------------------------- #
@@ -448,8 +476,8 @@ def _stub_answer(question: str, error: str = "") -> dict:
 
 
 # static SPA (mounted last so /api wins) ------------------------------------- #
-# the React/TS build (web/static-react, produced by `npm run build`).
-_REACT = Path(__file__).resolve().parent / "static-react"
+# the React/TS build (web/static-react, produced by `npm run build`); _REACT is
+# defined near the top so /health can share it.
 if (_REACT / "index.html").exists():
     app.mount("/", StaticFiles(directory=str(_REACT), html=True), name="static")
 else:  # no build present — API still serves; surface a clear hint at root
@@ -463,4 +491,7 @@ else:  # no build present — API still serves; surface a clear hint at root
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "8099")))
+    # Bind localhost by default (safe for local dev); a container/host sets
+    # SHADOW_HOST=0.0.0.0 to accept traffic from the platform's load balancer.
+    host = os.environ.get("SHADOW_HOST", "127.0.0.1")
+    uvicorn.run(app, host=host, port=int(os.environ.get("PORT", "8099")))

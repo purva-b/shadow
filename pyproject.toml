@@ -21,7 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 # agent orchestration + deploy (not needed for the offline test lane)
 agents = ["strands-agents", "bedrock-agentcore", "bedrock-agentcore-starter-toolkit"]
-dev = ["ruff", "pyright", "pytest"]
+dev = ["ruff", "pyright", "pytest", "httpx"]
 
 [tool.setuptools]
 # flat layout: these top-level dirs ARE the package. Declared explicitly because

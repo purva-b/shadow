@@ -89,6 +89,17 @@ SWITCHABLE = list(USERS.keys())
 
 app = FastAPI(title="Shadow")
 
+# Real Box OAuth 2.0 login. The routes (/auth/login, /auth/callback) are inert
+# until a Box OAuth app is configured (BOX_OAUTH_CLIENT_ID); when it is, they
+# replace the dev login — identity is minted server-side into the SAME signed
+# session cookie, so no downstream call site changes.
+try:
+    from web.oauth import router as _oauth_router
+
+    app.include_router(_oauth_router)
+except Exception as _e:  # never block startup on the optional OAuth layer
+    print(f"[server] OAuth router not mounted: {_e}", flush=True)
+
 # the React/TS build dir (web/static-react, produced by `npm run build`).
 # Defined up here so /health and the static mount below share one constant.
 _REACT = Path(__file__).resolve().parent / "static-react"
@@ -152,19 +163,28 @@ def _name_for(user_id: str) -> str:
 @app.get("/api/me")
 def me(request: Request):
     """The current session identity (or null). Identity is read from the signed
-    session cookie ONLY — never from a request parameter."""
+    session cookie ONLY — never from a request parameter.
+
+    `auth_mode` tells the UI how to log in: "oauth" (send the user to
+    /auth/login) once a Box OAuth app is configured, else "dev" (the seeded
+    roster switcher). The dev roster is omitted entirely in oauth mode."""
+    from core.config import oauth_enabled
     from web.auth import current_user_id
 
     uid = current_user_id(request)
     name = _name_for(uid) if uid else ""
+    oauth = oauth_enabled()
     return {
         "logged_in": bool(uid),
         "name": name or None,
         "user_id": uid,
         "meta": _user_meta(name) if name else {},
-        # dev-login roster (only meaningful in dev mode)
-        "options": [{"name": n, "user_id": _uid(n), **_user_meta(n)}
-                    for n in SWITCHABLE],
+        "auth_mode": "oauth" if oauth else "dev",
+        "login_url": "/auth/login" if oauth else None,
+        # dev-login roster — empty in oauth mode (no impersonation switcher)
+        "options": [] if oauth else [
+            {"name": n, "user_id": _uid(n), **_user_meta(n)} for n in SWITCHABLE
+        ],
     }
 
 
@@ -172,9 +192,17 @@ def me(request: Request):
 async def login(req: Request, response: Response):
     """DEV login: establish a session as one of the seeded App Users. This is a
     stand-in for Box OAuth — identity is set server-side and carried in a signed
-    cookie. Enabled only under SHADOW_DEV."""
+    cookie. Enabled only under SHADOW_DEV, and AUTOMATICALLY RETIRED once a real
+    Box OAuth app is configured (oauth_enabled()): then clients must go through
+    /auth/login instead, and this endpoint refuses."""
+    from core.config import oauth_enabled
     from web.auth import COOKIE, dev_mode, sign
 
+    if oauth_enabled():
+        return JSONResponse(
+            {"error": "dev login disabled — Box OAuth is active; use /auth/login"},
+            status_code=403,
+        )
     if not dev_mode():
         return JSONResponse({"error": "dev login disabled (set SHADOW_DEV=1)"},
                             status_code=404)

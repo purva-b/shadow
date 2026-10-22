@@ -1,15 +1,53 @@
+import { useState } from "react";
 import type { ActingAs, Sources } from "./types";
+import { api } from "./api";
 import { Icon, ICONS, ShadowMark, initials } from "./ui";
 
 export function Sidebar({
-  view, setView, sources, actingAs, onSwitch,
+  view, setView, sources, actingAs, onSwitch, onSynced,
 }: {
   view: string;
   setView: (v: "ask" | "memory") => void;
   sources: Sources | null;
   actingAs: ActingAs | null;
   onSwitch: (name: string) => void;
+  onSynced?: () => void;
 }) {
+  const [syncingName, setSyncingName] = useState<string>("");
+  const [syncMsg, setSyncMsg] = useState<string>("");
+
+  async function syncConnector(name: string) {
+    setSyncingName(name);
+    setSyncMsg("");
+    try {
+      const r = await api.syncConnector(name);
+      setSyncMsg(r.ok ? `${name}: +${r.ingested ?? 0} synced` : `${name}: ${r.error || "failed"}`);
+      onSynced?.();
+    } catch (e) {
+      setSyncMsg(`${name}: sync failed`);
+    } finally {
+      setSyncingName("");
+    }
+  }
+
+  const connectorRow = (
+    name: string, icon: string, label: string, hint: string,
+  ) => (
+    <li className="connector-row">
+      <Icon d={icon} sm />
+      <span>{label}</span>
+      <em>{sources?.connectors?.[name] ?? 0}</em>
+      <button
+        className="sync-btn"
+        onClick={() => syncConnector(name)}
+        disabled={!!syncingName}
+        title={hint}
+      >
+        {syncingName === name ? "Syncing…" : "Sync"}
+      </button>
+    </li>
+  );
+
   const navItem = (id: "ask" | "memory", icon: string, label: string) => (
     <button
       className={"nav-item" + (view === id ? " active" : "")}
@@ -54,6 +92,15 @@ export function Sidebar({
           {row(ICONS.slack, "Slack channels", sources?.slack ?? "—")}
           {row(ICONS.issue, "Issues and PRs", sources?.issues_prs ?? "—")}
           {row(ICONS.doc, "Docs in Box", sources?.docs ?? "—")}
+          {connectorRow("github", ICONS.github, "GitHub (PRs/issues)",
+            "Pull PRs/issues from the configured repo (needs GITHUB_TOKEN + GITHUB_REPO)")}
+          {connectorRow("slack", ICONS.slack, "Slack (live)",
+            "Pull channel threads from Slack (needs SLACK_BOT_TOKEN)")}
+          {connectorRow("confluence", ICONS.doc, "Confluence (wiki)",
+            "Pull pages from Confluence (needs CONFLUENCE_BASE_URL + API token)")}
+          {connectorRow("calendar", ICONS.meeting, "Calendar (events)",
+            "Pull events from Google Calendar (needs GCAL_ACCESS_TOKEN)")}
+          {syncMsg && <li className="sync-msg">{syncMsg}</li>}
         </ul>
       </div>
 
@@ -72,7 +119,7 @@ export function Sidebar({
         </select>
         <div className="user-chip">
           <span className="avatar">
-            {actingAs?.meta.initials ?? (actingAs ? initials(actingAs.name) : "")}
+            {actingAs?.meta.initials ?? (actingAs?.name ? initials(actingAs.name) : "")}
           </span>
           <div>
             <div className="user-name">{actingAs?.name}</div>

@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from shadow_box import tools as T  # noqa: E402
-from shadow_box.client import get_service_client, get_user_client  # noqa: E402
+from shadow_box.client import get_service_client  # noqa: E402
 
 IDS = json.loads((ROOT / "seed" / "ids.json").read_text())
 FID = IDS["file_ids"]

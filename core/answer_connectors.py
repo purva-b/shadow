@@ -1,0 +1,147 @@
+"""Answer from connector records — the cross-source answer path.
+
+Given a question asked by a principal, recall readable records from the store
+and compose the same JSON shape the UI already binds to (answer_markdown,
+citations[], decision_status, who_to_ask, restricted_note). The Box pipeline is
+unchanged; this handles questions whose evidence lives in connector sources
+(GitHub, Slack, ...). The server tries connector records first and falls back
+to the Box pipeline when nothing relevant is found here.
+"""
+from __future__ import annotations
+
+from . import retrieve
+from .store import store as _default_store
+
+
+def _components_from_records(records) -> list[str]:
+    """Union of components across the recalled records, in a stable priority
+    order so who-to-ask resolves the primary owner (same order the Box pipeline
+    uses — both read config/workspace.yaml taxonomy)."""
+    from . import taxonomy
+
+    comps: list[str] = []
+    for r in records:
+        for c in r.components:
+            if c not in comps:
+                comps.append(c)
+    return taxonomy.sort_by_priority(comps)
+
+
+def _principal_to_box_uid(principal: str):
+    """Map a canonical principal (e.g. priya@payments.example) back to a Box App
+    User id, for perm-scoped Box reads. ids come from seed/ids.json — no import
+    of the agents package."""
+    from .structured import _ids
+
+    users = _ids().get("users", {})
+    local = principal.split("@")[0].lower()
+    return next((u for n, u in users.items() if n.split()[0].lower() == local), None)
+
+
+def _enrich_structured(readable, principal):
+    """Compute who_to_ask + decision_status from the SHARED structured helpers
+    (now core.structured, source-agnostic — Week 4 severed the agents.answer
+    import), so a cross-source answer keeps the same structured fields the Box
+    pipeline produces. Degrades to None if Box is unreachable."""
+    who = decision = None
+    try:
+        from . import structured
+
+        components = _components_from_records(readable)
+        uid = _principal_to_box_uid(principal)
+        if uid is None:
+            return None, None
+        cards = structured.people_cards()
+        org = structured.org_chart()
+        decs = structured.decisions(components, str(uid))
+        decision = structured.decision_status(decs)
+        cited_people = ",".join(p for r in readable for p in r.people)
+        who = structured.who_to_ask(components, cards, org, cited_people)
+    except Exception:
+        pass
+    return who, decision
+
+
+def _readable_owner(question: str, principal: str) -> dict | None:
+    """Point the asker at a READABLE owner for the topic — derived only from the
+    people cards (which the asker's answer already relies on), NEVER from the
+    restricted record's contents. Prefers an active owner of the question's
+    component; falls back to a manager. Returns None if none is suitable (no
+    hardcoded name). This gives the connector path the same 'ask this readable
+    person instead' pointer the Box pipeline has."""
+    try:
+        from . import structured, taxonomy
+
+        comps = taxonomy.components_from(question)
+        cards = structured.people_cards()
+        active = [c for c in cards if c.get("active") == "yes"]
+        for comp in comps:
+            for c in active:
+                if comp in (c.get("expertise") or []):
+                    return {"name": c.get("name"), "role": c.get("role"),
+                            "reason": "Owns this area and can point you to the "
+                                      "right place.", "moved_note": None}
+        for c in active or cards:
+            if "manager" in (c.get("role", "") or "").lower():
+                return {"name": c.get("name"), "role": c.get("role"),
+                        "reason": "Manages this team and can route your request.",
+                        "moved_note": None}
+    except Exception:
+        pass
+    return None
+
+
+def answer_from_connectors(principal: str, question: str, context=None,
+                           store=None, sources=None) -> dict | None:
+    """Return a UI answer dict, or None if no connector record is relevant
+    (so the caller falls back to the Box pipeline)."""
+    store = store or _default_store
+    got = retrieve.recall(question, principal, store, context=context,
+                          sources=sources)
+    if not got.readable and not got.withheld:
+        return None                       # nothing here -> let Box pipeline try
+
+    # FAILURE: relevant records exist but the asker can read NONE — a full
+    # refusal. Point them at a readable owner (parity with the Box pipeline),
+    # derived from people cards, never from the restricted record itself.
+    if not got.readable:
+        who = _readable_owner(question, principal)
+        who_line = (f" {who['name']} ({who['role']}) can point you to the right place."
+                    if who and who.get("name") else "")
+        note = ("I can't answer that from team memory — the matching source is in "
+                "a restricted space your access doesn't include." + who_line)
+        return {
+            "answer_markdown": note, "citations": [],
+            "decision_status": None, "who_to_ask": who, "restricted_note": note,
+        }
+
+    cits = [retrieve.to_citation(r, store) for r in got.readable]
+    lead = cits[0]
+    parts = [f"Here's what the team's sources have on this. {lead['summary']} [1]"]
+    if len(cits) > 1:
+        parts.append("It also comes up in:")
+        parts.append("\n".join(
+            f"- [{i+1}] {c['summary']} ({c['source_type']}, {c['date']})"
+            for i, c in enumerate(cits[1:], start=1)))
+
+    # UNIFIED: regain who-to-ask + decision status (the Box pipeline's features)
+    who, decision = _enrich_structured(got.readable, principal)
+    if who and who.get("name"):
+        parts.append(f"**Who to ask:** {who['name']} — {who.get('reason','')}"
+                     + (f" {who['moved_note']}" if who.get("moved_note") else ""))
+
+    partial_note = None
+    if got.withheld:
+        partial_note = (f"{len(got.withheld)} source(s) on this are in a restricted "
+                        "space your access doesn't include, so they're left out.")
+        parts.append(partial_note)
+
+    # strip the private 'summary' helper before returning citations to the UI
+    clean = [{k: v for k, v in c.items() if k != "summary"} for c in cits]
+    return {
+        "answer_markdown": "\n\n".join(parts),
+        "citations": clean,
+        "decision_status": decision,
+        "who_to_ask": who,
+        "restricted_note": partial_note,
+    }

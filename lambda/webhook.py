@@ -11,7 +11,7 @@ import hashlib
 import hmac
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 PRIMARY = os.environ.get("BOX_WEBHOOK_KEY_1", "")
 SECONDARY = os.environ.get("BOX_WEBHOOK_KEY_2", "")
@@ -32,7 +32,7 @@ def verify(body: str, headers: dict) -> bool:
     s2 = headers.get("box-signature-secondary") or headers.get("Box-Signature-Secondary", "")
     try:
         dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        if abs((datetime.now(timezone.utc) - dt).total_seconds()) > MAX_SKEW_MIN * 60:
+        if abs((datetime.now(UTC) - dt).total_seconds()) > MAX_SKEW_MIN * 60:
             return False
     except Exception:
         return False

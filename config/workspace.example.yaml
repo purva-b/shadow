@@ -1,0 +1,61 @@
+# Shadow workspace config — this is what makes Shadow team-agnostic.
+# Copy to config/workspace.yaml and edit per team. Nothing here is Payments-specific.
+
+workspace:
+  name: "Payments"            # display name only
+  canonical_domain: "acme.com"
+
+# Components are WORKSPACE-DEFINED tags, not a fixed enum. A different team
+# would list its own (e.g. billing, auth, search). Ingest tags records with
+# these; retrieval and who-to-ask route on them.
+components:
+  - retry-service
+  - payments-api
+  - ledger
+  - gateway-client
+  - checkout
+
+# Taxonomy routes question words to components and ranks them for who-to-ask.
+# A different team edits this (no code change) to re-route questions.
+#   keywords: substring in the question (lowercased) -> component
+#   priority: resolution order, lower = tried first (primary owner wins)
+taxonomy:
+  keywords:
+    retry: retry-service
+    idempoten: retry-service
+    gateway: gateway-client
+    ledger: ledger
+    checkout: checkout
+    payment: payments-api
+  priority:
+    - retry-service
+    - gateway-client
+    - ledger
+    - payments-api
+    - checkout
+
+# Which connectors are live for this workspace. A connector not listed here is
+# never loaded, even if its file exists. Adding a source = write the connector
+# file + add its name here.
+enabled_connectors:
+  - box
+  # - slack
+  # - github
+  # - confluence
+  # - calendar
+
+# Identity map: one human, many handles. Resolves Box/Slack/GitHub/calendar
+# handles to one canonical principal so permissions and people-cards stay
+# correct across every source. Replaces the hardcoded NAME_TO_EMAIL dict.
+identities:
+  - canonical: priya@acme.com
+    box: priya@payments.example
+    github: pnair
+    aliases: ["Priya Nair", "Priya"]
+  - canonical: dana@acme.com
+    box: dana@payments.example
+    aliases: ["Dana Kim", "Dana"]
+
+# Per-connector secrets are read from env (never committed). The connector's
+# subscribe() names which env var holds its webhook secret.
+# e.g. BOX_WEBHOOK_KEY_1, SLACK_SIGNING_SECRET, GITHUB_WEBHOOK_SECRET

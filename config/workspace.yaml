@@ -1,0 +1,47 @@
+workspace:
+  name: "Payments"
+  canonical_domain: "payments.example"
+
+components:
+  - retry-service
+  - payments-api
+  - ledger
+  - gateway-client
+  - checkout
+
+# Taxonomy maps free-text question words to components, and ranks components so
+# who-to-ask resolves the PRIMARY owner first. Workspace-defined, not code.
+# `keywords`: substring (lowercased) -> component. `priority`: lower = first.
+taxonomy:
+  keywords:
+    retry: retry-service
+    retries: retry-service
+    idempoten: retry-service
+    gateway: gateway-client
+    ledger: ledger
+    checkout: checkout
+    payment: payments-api
+  priority:
+    - retry-service
+    - gateway-client
+    - ledger
+    - payments-api
+    - checkout
+
+enabled_connectors:
+  - box
+  - github
+
+identities:
+  - canonical: priya@payments.example
+    github: pnair
+    aliases: ["Priya Nair", "Priya"]
+  - canonical: dana@payments.example
+    github: dkim
+    aliases: ["Dana Kim", "Dana"]
+  - canonical: alex@payments.example
+    github: arivera
+    aliases: ["Alex Rivera", "Alex"]
+  - canonical: sam@payments.example
+    github: sortiz
+    aliases: ["Sam Ortiz", "Sam"]

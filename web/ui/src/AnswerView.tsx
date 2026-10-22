@@ -47,87 +47,104 @@ export function Thinking({ question }: { question: string }) {
   );
 }
 
-export function AnswerView({ question, answer, followups = [], onAsk }:
+export function AnswerTurn({ question, answer, followups = [], onAsk }:
   { question: string; answer: Answer; followups?: string[]; onAsk?: (q: string) => void }) {
   const cites = answer.citations ?? [];
-  const [sel, setSel] = useState(0);
+  const [sel, setSel] = useState<number | null>(null);
   const selectCite = (n: number) => setSel(Math.max(0, Math.min(cites.length - 1, n - 1)));
 
   return (
-    <div className="answer-layout">
-      <div className="conversation">
-        <div className="q-bubble">{question}</div>
-        <div className="answer-block">
-          <div className="answer-by"><ShadowMark size={24} /> Shadow</div>
-          <div className="answer-md">{renderMarkdown(answer.answer_markdown, selectCite)}</div>
+    <div className="turn">
+      <div className="q-bubble">{question}</div>
+      <div className="answer-block">
+        <div className="answer-by"><ShadowMark size={22} /> Shadow</div>
+        <div className="answer-md">{renderMarkdown(answer.answer_markdown, selectCite)}</div>
 
-          {answer.decision_status && (
-            <div className="decision-row">
-              <span className="lbl">Decision</span>
-              <span className="txt">{answer.decision_status.decision}</span>
-              <Chip ds={answer.decision_status} />
+        {answer.decision_status && (
+          <div className="decision-row">
+            <span className="lbl">Decision</span>
+            <span className="txt">{answer.decision_status.decision}</span>
+            <Chip ds={answer.decision_status} />
+          </div>
+        )}
+
+        {answer.who_to_ask && (
+          <div className="who-card">
+            <span className="wavatar">{initials(answer.who_to_ask.name)}</span>
+            <div>
+              <div className="wname">{answer.who_to_ask.name}</div>
+              <div className="wrole">{answer.who_to_ask.role}</div>
+              <div className="wreason">{answer.who_to_ask.reason}</div>
+              {answer.who_to_ask.moved_note && (
+                <div className="wmoved">{answer.who_to_ask.moved_note}</div>
+              )}
             </div>
-          )}
+          </div>
+        )}
 
-          {cites.length > 0 && (
-            <div className="sources">
-              <h4>Where this was discussed</h4>
-              {cites.map((c, i) => (
-                <div key={c.file_id} className="source-row" onClick={() => setSel(i)}>
-                  <span className="num">{i + 1}</span>
-                  <Icon d={srcIcon(c.source_type)} sm />
-                  <a className="nm" href={c.box_url} target="_blank" rel="noopener">{c.name}</a>
-                  <span className="meta">{c.source_type} · {c.date}</span>
-                </div>
+        {answer.restricted_note && cites.length > 0 && (
+          <div className="restricted">
+            <Icon d={ICONS.lock} sm />
+            <div>
+              <div className="rtitle">One source was withheld</div>
+              <div className="rbody">{answer.restricted_note}</div>
+            </div>
+          </div>
+        )}
+
+        {answer.agent_trace && answer.agent_trace.length > 0 && (
+          <details className="agent-trace">
+            <summary>How Shadow searched ({answer.agent_trace.length} step{answer.agent_trace.length > 1 ? "s" : ""})</summary>
+            <ul>
+              {answer.agent_trace.map((st, i) => (
+                <li key={i}>
+                  <span className="atool">{st.tool.replace("_search", "")}</span>
+                  <span className="aquery">"{st.query}"</span>
+                  <span className="acount">
+                    {st.found < 0
+                      ? "reused"
+                      : `${st.found} found${st.withheld > 0 ? ` · ${st.withheld} withheld` : ""}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        {cites.length > 0 && (
+          <div className="sources">
+            <h4>Sources</h4>
+            {cites.map((c, i) => (
+              <div key={c.file_id}
+                className={"source-row" + (sel === i ? " open" : "")}
+                onClick={() => setSel(sel === i ? null : i)}>
+                <span className="num">{i + 1}</span>
+                <Icon d={srcIcon(c.source_type)} sm />
+                <span className="nm">{c.name}</span>
+                <span className="meta">{c.source_type} · {c.date}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {sel !== null && cites[sel] && <Preview cite={cites[sel]} onClose={() => setSel(null)} />}
+
+        {followups.length > 0 && onAsk && (
+          <div className="followups">
+            <span className="followups-label">Follow up</span>
+            <div className="followup-chips">
+              {followups.map((f) => (
+                <button key={f} className="followup-chip" onClick={() => onAsk(f)}>{f}</button>
               ))}
             </div>
-          )}
-
-          {answer.who_to_ask && (
-            <div className="who-card">
-              <span className="wavatar">{initials(answer.who_to_ask.name)}</span>
-              <div>
-                <div className="wname">{answer.who_to_ask.name}</div>
-                <div className="wrole">{answer.who_to_ask.role}</div>
-                <div className="wreason">{answer.who_to_ask.reason}</div>
-                {answer.who_to_ask.moved_note && (
-                  <div className="wmoved">{answer.who_to_ask.moved_note}</div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {answer.restricted_note && answer.citations.length > 0 && (
-            <div className="restricted">
-              <Icon d={ICONS.lock} sm />
-              <div>
-                <div className="rtitle">One source was withheld</div>
-                <div className="rbody">{answer.restricted_note}</div>
-              </div>
-            </div>
-          )}
-
-          {followups.length > 0 && onAsk && (
-            <div className="followups">
-              <span className="followups-label">Ask a follow-up</span>
-              <div className="followup-chips">
-                {followups.map((f) => (
-                  <button key={f} className="followup-chip" onClick={() => onAsk(f)}>
-                    {f}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-
-      {cites.length > 0 && <Preview cite={cites[sel]} />}
     </div>
   );
 }
 
-function Preview({ cite }: { cite: Citation }) {
+function Preview({ cite, onClose }: { cite: Citation; onClose: () => void }) {
   const [url, setUrl] = useState<string | null | undefined>(undefined);
   const reqId = useRef(0);
   useEffect(() => {
@@ -139,20 +156,18 @@ function Preview({ cite }: { cite: Citation }) {
   }, [cite.file_id]);
 
   return (
-    <div className="preview">
-      <div className="preview-card">
-        <div className="preview-head">
-          <Icon d={srcIcon(cite.source_type)} sm />
-          <span className="pnm">{cite.name}</span>
-          <span className="pdate">{cite.date}</span>
-          <a className="open-box" href={cite.box_url} target="_blank" rel="noopener">
-            Open in Box <Icon d={ICONS.ext} sm />
-          </a>
-        </div>
-        {url === undefined && <div className="ph">Loading preview…</div>}
-        {url === null && <div className="ph">Preview unavailable — open in Box.</div>}
-        {url && <iframe src={url} title={cite.name} />}
+    <div className="preview-inline">
+      <div className="preview-head">
+        <Icon d={srcIcon(cite.source_type)} sm />
+        <span className="pnm">{cite.name}</span>
+        <a className="open-box" href={cite.box_url} target="_blank" rel="noopener">
+          Open in Box <Icon d={ICONS.ext} sm />
+        </a>
+        <button className="preview-close" onClick={onClose} aria-label="Close preview">✕</button>
       </div>
+      {url === undefined && <div className="ph">Loading preview…</div>}
+      {url === null && <div className="ph">Preview unavailable — open in Box.</div>}
+      {url && <iframe src={url} title={cite.name} />}
     </div>
   );
 }

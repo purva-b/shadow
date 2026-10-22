@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shadow"
+version = "0.1.0"
+description = "Permission-aware AI knowledge agent over pluggable team sources"
+requires-python = ">=3.11"
+dependencies = [
+    "box-sdk-gen",
+    "fastapi",
+    "uvicorn[standard]",
+    "boto3",
+    "python-dotenv",
+    "requests",
+    "pyyaml",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+# agent orchestration + deploy (not needed for the offline test lane)
+agents = ["strands-agents", "bedrock-agentcore", "bedrock-agentcore-starter-toolkit"]
+# durable store at scale — Postgres + pgvector. Only needed when
+# SHADOW_STORE_BACKEND=pgvector; the default jsonl backend needs none of this.
+pgvector = ["psycopg[binary]>=3.1", "pgvector>=0.2"]
+dev = ["ruff", "pyright", "pytest", "httpx"]
+
+[tool.setuptools]
+# flat layout: these top-level dirs ARE the package. Declared explicitly because
+# setuptools can't auto-discover when several top-level dirs look like packages.
+packages = ["core", "connectors", "shadow_box", "agents", "web"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "web/static-react", "seed/data", "web/ui"]
+
+[tool.ruff.lint]
+# a pragmatic starter set: pyflakes (F), pycodestyle (E/W), isort (I), bugbear (B),
+# comprehensions (C4), pyupgrade (UP). Not maximalist — this is a portfolio repo,
+# not a linter showcase.
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = [
+    "E501",  # line length is handled by the formatter, not hard-enforced
+    "B008",  # FastAPI uses function calls in argument defaults (Depends())
+]
+
+[tool.ruff.lint.per-file-ignores]
+# scripts and seed set sys.path / load .env BEFORE importing project modules —
+# E402 (import-not-at-top) is intentional there, not a defect.
+"scripts/*.py" = ["E402"]
+"seed/*.py" = ["E402"]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+include = ["core", "connectors", "shadow_box", "agents", "web"]
+exclude = ["**/__pycache__", ".venv", "web/static-react", "web/ui", "seed/data"]
+# Week 4: tightened to "standard" now that core/ is fully typed and no longer
+# imports agents. Untyped third-party SDKs (box-sdk-gen, strands, boto3) are
+# reached through narrow typed seams; missing-stub reports stay suppressed so
+# standard mode flags real type bugs rather than drowning in stub noise.
+typeCheckingMode = "standard"
+pythonVersion = "3.13"
+reportMissingImports = false
+reportMissingModuleSource = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_eval.py"]
+addopts = "-q"

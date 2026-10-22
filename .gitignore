@@ -2,6 +2,9 @@
 .env
 seed/ids.json
 web/activity_log.jsonl
+web/records_store.jsonl
+web/notifications.jsonl
+web/embed_cache.json
 __pycache__/
 *.pyc
 web/ui/node_modules/
@@ -10,3 +13,7 @@ seed/data/
 seed/live/
 *.log
 .DS_Store
+web/ui/tsconfig.tsbuildinfo
+
+# build metadata
+*.egg-info/

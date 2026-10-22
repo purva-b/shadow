@@ -20,12 +20,20 @@ export interface WhoToAsk {
   moved_note: string | null;
 }
 
+export interface AgentStep {
+  tool: string;
+  query: string;
+  found: number;
+  withheld: number;
+}
+
 export interface Answer {
   answer_markdown: string;
   citations: Citation[];
   decision_status: DecisionStatus | null;
   who_to_ask: WhoToAsk | null;
   restricted_note: string | null;
+  agent_trace?: AgentStep[];
 }
 
 export interface ActingAsOption {
@@ -35,8 +43,9 @@ export interface ActingAsOption {
   initials?: string;
 }
 export interface ActingAs {
-  name: string;
-  user_id: string;
+  logged_in?: boolean;
+  name: string | null;
+  user_id: string | null;
   meta: { subtitle?: string; initials?: string };
   options: ActingAsOption[];
 }
@@ -47,6 +56,7 @@ export interface Sources {
   issues_prs: number;
   docs: number;
   live: boolean;
+  connectors?: Record<string, number>;
 }
 
 export interface ActivityRow {
@@ -70,4 +80,14 @@ export interface DecisionRow {
 export interface QItem {
   text: string;
   answer: Answer | null;
+}
+
+export interface Turn {
+  question: string;
+  answer: Answer | null;   // null while loading
+}
+export interface Conversation {
+  id: string;
+  title: string;
+  turns: Turn[];
 }

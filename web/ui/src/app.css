@@ -329,3 +329,222 @@ a:hover{text-decoration:underline}
   border-radius:var(--r-pill);padding:1px 8px}
 .agent-trace .aquery{color:var(--ink-2);font-style:italic}
 .agent-trace .acount{margin-left:auto;color:var(--muted)}
+
+/* ═════════════════════════ Shadow floating chat widget ═════════════════════════ */
+/* The whole product is a popup. The canvas is intentionally empty (no background
+   chrome) so the launcher + popup are all there is. */
+.sw-canvas{position:fixed;inset:0;background:transparent}
+
+/* ---- animations ---- */
+@keyframes sw-spin{to{transform:rotate(360deg)}}
+@keyframes sw-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes sw-bob-big{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-9px) rotate(3deg)}}
+@keyframes sw-blink{0%,92%,100%{transform:scaleY(1)}96%{transform:scaleY(.12)}}
+@keyframes sw-drift{0%,100%{transform:translateX(0)}50%{transform:translateX(7px)}}
+@keyframes sw-rise{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes sw-popin{0%{opacity:0;transform:translateY(16px) scale(.92)}60%{transform:translateY(-2px) scale(1.01)}100%{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes sw-dot{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-4px);opacity:1}}
+@keyframes sw-ping{0%{transform:scale(.8);opacity:.9}70%,100%{transform:scale(2.2);opacity:0}}
+@keyframes sw-blinkcaret{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ---- ghost mark ---- */
+.gm-stage{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.gm-halo{display:none}
+.gm-wrap{position:relative;display:inline-flex;align-items:center;justify-content:center;
+  width:100%;height:100%;border-radius:50%;background:transparent}
+.gm-ghost{animation:sw-bob 3s ease-in-out infinite;transform-origin:center}
+.gm-ghost.think{animation:sw-bob-big 1.1s ease-in-out infinite}
+.gm-eye{transform-origin:center;transform-box:fill-box;animation:sw-blink 4.6s infinite}
+
+/* ---- launcher ---- */
+.sw-launcher{position:fixed;right:22px;bottom:22px;width:62px;height:62px;border:none;cursor:pointer;
+  border-radius:50%;background:#0E1120;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 14px 34px rgba(23,26,43,.34);z-index:9998;animation:sw-drift 5s ease-in-out infinite;
+  transition:transform .16s,box-shadow .16s}
+.sw-launcher:hover{transform:scale(1.07)}
+.sw-launcher:active{transform:scale(.95)}
+.sw-launcher.hidden{display:none}
+.sw-ping{position:absolute;top:8px;right:8px;width:12px;height:12px;border-radius:50%;background:#6B7280;
+  border:2px solid #0E1120}
+.sw-ping::after{content:"";position:absolute;inset:-2px;border-radius:50%;background:#6B7280;animation:sw-ping 2.4s infinite}
+
+/* ---- popup frame ---- */
+.sw-pop{position:fixed;right:22px;bottom:22px;width:372px;max-width:calc(100vw - 32px);
+  height:min(620px,calc(100vh - 44px));background:#fff;border-radius:22px;overflow:hidden;
+  display:flex;flex-direction:column;z-index:9999;
+  box-shadow:0 32px 72px rgba(23,26,43,.26),0 10px 26px rgba(23,26,43,.14);
+  animation:sw-popin .46s cubic-bezier(.2,.9,.3,1.25) both}
+
+/* header */
+.sw-head{position:relative;display:flex;align-items:center;gap:12px;padding:15px 15px 14px;
+  background:#1A1C22;color:#fff;overflow:visible;border-bottom:1px solid #2A2D35}
+.sw-head-glow{position:absolute;inset:0;background:radial-gradient(130px 70px at 20% 0,rgba(255,255,255,.07),transparent)}
+.sw-id{z-index:1;min-width:0}
+.sw-name{font-family:"Space Grotesk","Inter",sans-serif;font-weight:600;font-size:16px;letter-spacing:-.01em}
+.sw-sub{display:inline-flex;align-items:center;gap:5px;background:none;border:none;color:#fff;opacity:.94;
+  font-size:11.5px;font-family:inherit;cursor:pointer;padding:1px 0;margin-top:1px}
+.sw-sub:hover{opacity:1;text-decoration:underline}
+.sw-dot{width:6px;height:6px;border-radius:50%;background:#9CA3AF;box-shadow:0 0 0 0 rgba(156,163,175,.7);animation:sw-ping 2.2s infinite;flex:none}
+.sw-caret{font-size:9px;opacity:.85}
+.sw-x{margin-left:auto;z-index:1;width:28px;height:28px;border:none;border-radius:50%;cursor:pointer;
+  background:rgba(255,255,255,.16);color:#fff;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;transition:background .14s}
+.sw-x:hover{background:rgba(255,255,255,.3)}
+.sw-x .icon{width:16px;height:16px}
+
+/* header back button (chat page → history) */
+.sw-back{z-index:1;width:40px;height:40px;border:none;border-radius:50%;cursor:pointer;flex:none;
+  background:rgba(255,255,255,.14);color:#fff;display:flex;align-items:center;justify-content:center;transition:background .14s}
+.sw-back:hover{background:rgba(255,255,255,.28)}
+.sw-back .icon{width:18px;height:18px}
+
+/* history page */
+.sw-page-history{display:flex;flex-direction:column}
+.sw-empty-hint{text-align:center;font-size:11.5px;color:var(--muted);padding:14px 0 4px}
+.sw-hlist{display:flex;flex-direction:column;gap:7px;margin-top:4px}
+.sw-hlist-h{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:4px 2px 2px}
+.sw-hrow{display:flex;align-items:center;gap:11px;width:100%;border:1px solid var(--line);background:#fff;
+  border-radius:13px;padding:12px;cursor:pointer;text-align:left;transition:transform .14s,box-shadow .14s,border-color .14s}
+.sw-hrow:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(23,26,43,.08);border-color:#C4C8D4}
+.sw-hrow-ic{width:34px;height:34px;border-radius:10px;background:#F0F1F4;color:#1A1C22;display:flex;align-items:center;justify-content:center;flex:none}
+.sw-hrow-ic .icon{width:17px;height:17px}
+.sw-hrow-body{display:flex;flex-direction:column;min-width:0;flex:1}
+.sw-hrow-title{font-size:13.5px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sw-hrow-meta{font-size:11px;color:var(--muted);margin-top:1px}
+.sw-hrow-go{color:var(--muted);flex:none}
+.sw-hrow-go .icon{width:16px;height:16px}
+
+/* new-chat empty state (chat page, no turns yet) */
+.sw-newchat{display:flex;flex-direction:column;align-items:center;text-align:center;padding:18px 6px 4px;animation:sw-rise .4s both}
+.sw-newchat-t{font-family:"Space Grotesk","Inter",sans-serif;font-size:15px;font-weight:600;color:var(--ink);margin:12px 0 14px}
+
+/* bottom-right new-chat FAB (history page) */
+.sw-fab{position:absolute;right:16px;bottom:16px;width:52px;height:52px;border:none;border-radius:50%;cursor:pointer;
+  background:#1A1C22;color:#fff;display:flex;align-items:center;justify-content:center;z-index:6;
+  box-shadow:0 10px 24px rgba(23,26,43,.32);transition:transform .14s,box-shadow .14s}
+.sw-fab:hover{transform:scale(1.08) rotate(90deg);box-shadow:0 12px 28px rgba(23,26,43,.4)}
+.sw-fab:active{transform:scale(.95)}
+.sw-fab .icon{width:24px;height:24px}
+
+/* header small icon button (sign out) */
+.sw-icon-btn{z-index:1;width:28px;height:28px;border:none;border-radius:8px;cursor:pointer;
+  background:rgba(255,255,255,.14);color:#fff;display:flex;align-items:center;justify-content:center;transition:background .14s}
+.sw-icon-btn:hover{background:rgba(255,255,255,.28)}
+.sw-icon-btn .icon{width:15px;height:15px}
+
+/* login page */
+.sw-login{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  gap:2px;padding:24px 22px;background:#F6F7FB}
+.sw-login .sw-greet{margin-top:16px}
+.sw-login .sw-greet-sub{max-width:280px;margin-bottom:22px}
+.sw-signin{display:inline-flex;align-items:center;gap:10px;border:none;cursor:pointer;
+  background:#1A1C22;color:#fff;font-family:inherit;font-size:14px;font-weight:600;
+  padding:12px 22px;border-radius:12px;box-shadow:0 8px 20px rgba(23,26,43,.26);
+  transition:transform .14s,box-shadow .14s}
+.sw-signin:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(23,26,43,.34)}
+.sw-signin:active{transform:translateY(0)}
+.sw-login-foot{margin-top:18px;font-size:11px;color:var(--muted);max-width:260px;line-height:1.5}
+
+/* "you" chip in the hint */
+.sw-you{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;
+  background:#1A1C22;color:#fff;font-size:8.5px;font-weight:700;margin-right:6px;vertical-align:-2px}
+
+/* body / scroll */
+.sw-body{flex:1;min-height:0;overflow-y:auto;background:#F6F7FB;padding:14px}
+.sw-body::-webkit-scrollbar{width:6px}
+.sw-body::-webkit-scrollbar-thumb{background:#d7dbe8;border-radius:3px}
+
+/* welcome */
+.sw-welcome{display:flex;flex-direction:column;align-items:center;text-align:center;padding:14px 6px 4px;animation:sw-rise .4s both}
+.sw-greet{font-family:"Space Grotesk","Inter",sans-serif;font-size:17px;font-weight:600;color:var(--ink);margin:12px 0 4px;letter-spacing:-.01em}
+.sw-greet-sub{font-size:12.5px;color:var(--muted);line-height:1.5;max-width:270px;margin-bottom:14px}
+.sw-cards{display:flex;flex-direction:column;gap:8px;width:100%}
+.sw-card{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:13px;
+  padding:10px 12px;cursor:pointer;text-align:left;transition:transform .14s,box-shadow .14s,border-color .14s}
+.sw-card:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(23,26,43,.1);border-color:#C4C8D4}
+.sw-card-tile{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;flex:none;font-size:15px}
+.sw-card-label{font-size:13px;color:var(--ink-2);font-weight:500}
+
+/* thread + bubbles (in-flight). AnswerTurn reuses the existing .q-bubble/.answer-block styles. */
+.sw-thread{display:flex;flex-direction:column;gap:11px}
+.sw-turn{display:flex;flex-direction:column;gap:8px}
+.sw-msg{max-width:82%;padding:9px 12px;border-radius:15px;font-size:13px;line-height:1.45;animation:sw-rise .34s both}
+.sw-me{align-self:flex-end;background:#1A1C22;color:#fff;border-bottom-right-radius:5px;box-shadow:0 4px 12px rgba(23,26,43,.18)}
+.sw-them{align-self:flex-start;background:#fff;border:1px solid var(--line);color:var(--ink-2);border-bottom-left-radius:5px}
+.sw-caretblink{display:inline-block;width:2px;height:1em;background:#6B7280;margin-left:2px;vertical-align:-2px;animation:sw-blinkcaret 1s steps(1) infinite}
+.sw-typing{align-self:flex-start;display:inline-flex;gap:4px;padding:10px 13px;background:#fff;border:1px solid var(--line);border-radius:15px;border-bottom-left-radius:5px}
+.sw-typing i{width:6px;height:6px;border-radius:50%;background:#9CA3AF;animation:sw-dot 1s infinite}
+.sw-typing i:nth-child(2){animation-delay:.18s}
+.sw-typing i:nth-child(3){animation-delay:.36s}
+
+/* AnswerTurn fits the narrow popup: shrink its paddings a touch */
+.sw-body .turn{margin-bottom:4px}
+.sw-body .answer-block{font-size:13px}
+
+/* composer */
+.sw-foot{display:flex;gap:8px;padding:11px 12px 6px;background:#fff;border-top:1px solid var(--line);align-items:center}
+.sw-foot input{flex:1;border:1px solid var(--line);border-radius:12px;background:#F6F7FB;padding:10px 13px;
+  font-size:13px;font-family:inherit;color:var(--ink);outline:none;transition:border-color .14s,box-shadow .14s}
+.sw-foot input:focus{border-color:#B6BAC6;box-shadow:0 0 0 3px rgba(26,28,34,.08);background:#fff}
+.sw-send{width:38px;height:38px;border-radius:12px;border:none;cursor:pointer;flex:none;
+  background:#1A1C22;color:#fff;display:flex;align-items:center;justify-content:center;
+  transition:transform .12s,box-shadow .12s}
+.sw-send:hover{transform:scale(1.07);box-shadow:0 6px 16px rgba(23,26,43,.3)}
+.sw-send:active{transform:scale(.93)}
+.sw-send:disabled{opacity:.45;cursor:default;transform:none;box-shadow:none}
+.sw-send .icon{width:17px;height:17px}
+.sw-hint{text-align:center;font-size:10px;color:var(--muted);padding:3px 0 9px;background:#fff}
+
+/* mobile: popup fills the screen */
+@media(max-width:460px){
+  .sw-pop{right:0;bottom:0;width:100vw;height:100vh;max-width:100vw;border-radius:0}
+  .sw-launcher{right:16px;bottom:16px}
+}
+
+/* respect reduced motion — kill all widget motion */
+@media(prefers-reduced-motion:reduce){
+  .gm-halo,.gm-ghost,.gm-ghost.think,.gm-eye,.sw-launcher,.sw-ping,.sw-ping::after,
+  .sw-pop,.sw-dot,.sw-typing i,.sw-msg,.sw-welcome,.sw-roster,.sw-caretblink,.sw-dot{animation:none!important}
+}
+
+/* ═════════════════════ full pages: /login and /connections ═════════════════════ */
+.lp{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(800px 400px at 72% -10%,#EDEEF3,transparent),#F6F7FB}
+.lp-card{width:100%;max-width:440px;background:#fff;border:1px solid var(--line);border-radius:22px;
+  box-shadow:0 24px 60px rgba(23,26,43,.12);padding:40px 34px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.lp-title{font-family:"Space Grotesk","Inter",sans-serif;font-size:23px;font-weight:600;color:var(--ink);margin:18px 0 0;letter-spacing:-.01em}
+.lp-sub{font-size:14px;color:var(--muted);line-height:1.6;max-width:340px;margin:10px 0 26px}
+.lp-btn{display:inline-flex;align-items:center;gap:11px;border:none;cursor:pointer;background:#1A1C22;color:#fff;
+  font-family:inherit;font-size:15px;font-weight:600;padding:14px 28px;border-radius:13px;
+  box-shadow:0 10px 24px rgba(23,26,43,.26);transition:transform .14s,box-shadow .14s}
+.lp-btn:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(23,26,43,.34)}
+.lp-btn:active{transform:translateY(0)}
+.lp-foot{margin-top:22px;font-size:12px;color:var(--muted);max-width:300px;line-height:1.5}
+
+.cp{min-height:100vh;background:#F6F7FB}
+.cp-top{display:flex;align-items:center;gap:12px;padding:16px 20px;background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:2}
+.cp-back{width:38px;height:38px;border-radius:50%;background:var(--panel-2);color:var(--ink);display:flex;align-items:center;justify-content:center;flex:none;text-decoration:none}
+.cp-back:hover{background:#E7E9F2}
+.cp-t{font-family:"Space Grotesk","Inter",sans-serif;font-size:18px;font-weight:600;color:var(--ink)}
+.cp-body{max-width:600px;margin:0 auto;padding:22px 20px 40px}
+.cp-intro{font-size:13.5px;color:var(--ink-2);line-height:1.6;margin:0 0 20px}
+.cp-loading{color:var(--muted);font-size:13px;text-align:center;padding:30px}
+.cp-row{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:11px;overflow:hidden}
+.cp-main{display:flex;align-items:center;gap:14px;padding:15px}
+.cp-logo{width:44px;height:44px;border-radius:12px;background:var(--panel-2);display:flex;align-items:center;justify-content:center;font-size:21px;flex:none}
+.cp-info{flex:1;min-width:0}
+.cp-name{font-size:15px;font-weight:600;color:var(--ink)}
+.cp-meta{font-size:12.5px;color:var(--muted);margin-top:2px}
+.cp-actions{display:flex;align-items:center;gap:9px;flex:none}
+.cp-badge{font-size:11px;font-weight:700;border-radius:999px;padding:4px 11px}
+.cp-badge.on{background:#E4F6EC;color:#0F7A43}
+.cp-btn{border:1px solid #1A1C22;background:#1A1C22;color:#fff;font-family:inherit;font-size:12.5px;font-weight:600;
+  border-radius:10px;padding:8px 15px;cursor:pointer;white-space:nowrap;transition:transform .12s,opacity .12s}
+.cp-btn:hover{transform:translateY(-1px)}
+.cp-btn:disabled{opacity:.55;cursor:default;transform:none}
+.cp-btn.ghost{background:#fff;color:var(--ink)}
+.cp-btn.ghost:hover{background:var(--panel-2)}
+.cp-setup{margin:0;padding:0 18px 16px 40px;border-top:1px solid var(--line-soft)}
+.cp-setup li{font-size:12.5px;color:var(--ink-2);line-height:1.6;margin-top:7px}
+.cp-setup li:first-child{margin-top:12px}
+.cp-note{font-size:12px;color:var(--ink-2);background:var(--panel-2);border-top:1px solid var(--line-soft);padding:10px 16px}
+@media(prefers-reduced-motion:reduce){.lp-btn,.cp-btn{transition:none}}

@@ -17,3 +17,6 @@ web/ui/tsconfig.tsbuildinfo
 
 # build metadata
 *.egg-info/
+
+# per-user connector OAuth tokens (secrets)
+web/.connector_tokens.json

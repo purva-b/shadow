@@ -48,6 +48,19 @@ export interface ActingAs {
   user_id: string | null;
   meta: { subtitle?: string; initials?: string };
   options: ActingAsOption[];
+  auth_mode?: "oauth" | "dev";
+  login_url?: string | null;
+}
+
+export interface ConnectorRow {
+  name: string;
+  label: string;
+  emoji: string;
+  configured: boolean;
+  connected: boolean;
+  indexed: number;
+  connect_url: string | null;
+  setup_steps: string[];
 }
 
 export interface Sources {

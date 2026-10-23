@@ -170,23 +170,42 @@ def seniority_rank(role: str) -> int:
     return 3
 
 
+def _owns_by_email(org: dict) -> dict[str, set]:
+    """Map each person's email -> the set of components they OWN, read from the
+    org chart. Ownership is a stronger signal than listing something as
+    expertise: the owner is who you should actually ask."""
+    out: dict[str, set] = {}
+    for team in (org or {}).get("teams", {}).values():
+        for m in team.get("members", []):
+            email = m.get("email", "")
+            if email:
+                out[email] = set(m.get("owns") or [])
+    return out
+
+
 def who_to_ask(components: list[str], cards: list[dict], org: dict,
                cited_people: str) -> dict | None:
-    """Resolve in component PRIORITY order (components arrives pre-sorted); among
-    owners of the same component, rank by expertise-match count then seniority
-    from the role title. No hardcoded roster of names."""
+    """Resolve in component PRIORITY order (components arrives pre-sorted). Among
+    candidates for a component, rank by: (1) OWNERSHIP of that component from the
+    org chart — an owner outranks a mere expert; (2) expertise-match count;
+    (3) seniority from the role title. No hardcoded roster of names."""
     comp_set = set(components or [])
+    owns = _owns_by_email(org)
 
-    def rank(c: dict) -> tuple[int, int]:
+    def rank(c: dict, comp: str) -> tuple[int, int, int]:
+        is_owner = comp in owns.get(c.get("email", ""), set())
         overlap = len(set(c.get("expertise") or []) & comp_set)
-        return (-overlap, seniority_rank(c.get("role", "")))
+        return (0 if is_owner else 1, -overlap, seniority_rank(c.get("role", "")))
 
     active = [c for c in cards if c.get("active") == "yes"]
     best = None
     for comp in components:
-        owners = [c for c in active if comp in (c.get("expertise") or [])]
+        # candidates = anyone who owns OR lists expertise in this component
+        owners = [c for c in active
+                  if comp in (c.get("expertise") or [])
+                  or comp in owns.get(c.get("email", ""), set())]
         if owners:
-            owners.sort(key=rank)
+            owners.sort(key=lambda c: rank(c, comp))
             best = owners[0]
             break
     if best is None:

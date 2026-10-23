@@ -1,5 +1,5 @@
 import type {
-  ActingAs, Answer, Sources, ActivityRow, DecisionRow,
+  ActingAs, Answer, Sources, ActivityRow, DecisionRow, ConnectorRow,
 } from "./types";
 
 async function get<T>(path: string): Promise<T> {
@@ -22,6 +22,10 @@ export const api = {
   me: () => get<ActingAs>("/api/me"),
   login: (user: string) => post<ActingAs>("/api/login", { user }),
   logout: () => post<{ logged_in: boolean }>("/api/logout", {}),
+  connections: () => get<{ logged_in: boolean; connectors: ConnectorRow[] }>("/api/connections"),
+  syncConnectorGet: (name: string) =>
+    post<{ ok: boolean; reason?: string; ingested?: number; store_total?: number; error?: string }>(
+      "/api/sync/" + encodeURIComponent(name), {}),
   sources: () => get<Sources>("/api/sources"),
   ask: (question: string, context: string[] = []) =>
     post<Answer>("/api/ask", { question, context }),

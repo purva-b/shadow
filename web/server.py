@@ -67,9 +67,9 @@ def _subtitle_for(name: str) -> str:
         return _SUBTITLE_CACHE[name]
     sub = ""
     try:
-        from agents.answer import _people_cards
+        from core.structured import people_cards
 
-        for c in _people_cards():
+        for c in people_cards():
             if c.get("name") == name:
                 role = c.get("role", "")
                 team = c.get("team", "")
@@ -99,6 +99,20 @@ try:
     app.include_router(_oauth_router)
 except Exception as _e:  # never block startup on the optional OAuth layer
     print(f"[server] OAuth router not mounted: {_e}", flush=True)
+
+try:
+    from web.connector_oauth import router as _conn_oauth_router
+
+    app.include_router(_conn_oauth_router)
+except Exception as _e:  # per-connector OAuth is optional too
+    print(f"[server] connector-OAuth router not mounted: {_e}", flush=True)
+
+try:
+    from core.notify_senders import install as _install_sender
+
+    print(f"[server] notification sender: {_install_sender()}", flush=True)
+except Exception as _e:  # delivery is best-effort; detection still records locally
+    print(f"[server] notification sender not installed: {_e}", flush=True)
 
 # the React/TS build dir (web/static-react, produced by `npm run build`).
 # Defined up here so /health and the static mount below share one constant.
@@ -249,6 +263,77 @@ def sources():
         "live": live,
         "connectors": connectors_count,
     }
+
+
+# per-connector setup instructions shown on the connections page when a
+# provider's OAuth app is not yet configured (the honest "here's how" path).
+_CONNECTOR_SETUP: dict[str, dict] = {
+    "box": {"emoji": "📦", "steps": [
+        "Box is Shadow's primary store and is connected via the server app.",
+        "Your user login is Box OAuth (Sign in with Box).",
+    ]},
+    "github": {"emoji": "🐙", "steps": [
+        "Register an OAuth app at github.com → Settings → Developer settings → OAuth Apps.",
+        "Set the callback to <PUBLIC_URL>/connect/github/callback.",
+        "Put the client id/secret in GITHUB_OAUTH_CLIENT_ID / _SECRET.",
+    ]},
+    "slack": {"emoji": "💬", "steps": [
+        "Create a Slack app at api.slack.com/apps with a user token (search:read, channels:history).",
+        "Add redirect URL <PUBLIC_URL>/connect/slack/callback.",
+        "Put the client id/secret in SLACK_OAUTH_CLIENT_ID / _SECRET.",
+    ]},
+    "confluence": {"emoji": "📄", "steps": [
+        "Create an OAuth 2.0 (3LO) app at developer.atlassian.com.",
+        "Add callback <PUBLIC_URL>/connect/confluence/callback and the read:confluence scopes.",
+        "Put the client id/secret in ATLASSIAN_OAUTH_CLIENT_ID / _SECRET.",
+    ]},
+    "calendar": {"emoji": "📅", "steps": [
+        "Create an OAuth client at console.cloud.google.com with the calendar.readonly scope.",
+        "Add redirect URI <PUBLIC_URL>/connect/calendar/callback.",
+        "Put the client id/secret in GOOGLE_OAUTH_CLIENT_ID / _SECRET.",
+    ]},
+}
+
+
+@app.get("/api/connections")
+def connections(request: Request):
+    """Per-connector status for the connections page: whether its OAuth app is
+    configured, whether THIS signed-in user has connected it, how many records
+    it has indexed, and setup steps when its app isn't configured yet."""
+    from web.auth import current_user_id
+    from web.connector_oauth import PROVIDERS, configured
+
+    uid = current_user_id(request)
+    counts: dict[str, int] = {}
+    try:
+        from core.store import store as _store
+        counts = _store.count_by_source()
+    except Exception:
+        counts = {}
+
+    def row(name: str, label: str):
+        setup = _CONNECTOR_SETUP.get(name, {})
+        is_cfg = (name == "box") or configured(name)
+        is_conn = False
+        if name == "box":
+            is_conn = bool(uid)  # the login IS the Box connection
+        elif uid:
+            try:
+                from core import token_store
+                is_conn = token_store.connected(uid, name)
+            except Exception:
+                is_conn = False
+        return {
+            "name": name, "label": label, "emoji": setup.get("emoji", "🔌"),
+            "configured": is_cfg, "connected": is_conn,
+            "indexed": counts.get(name, 0),
+            "connect_url": f"/connect/{name}" if (is_cfg and name != "box") else None,
+            "setup_steps": [] if is_cfg else setup.get("steps", []),
+        }
+
+    rows = [row("box", "Box")]
+    rows += [row(n, p.label) for n, p in PROVIDERS.items()]
+    return {"logged_in": bool(uid), "connectors": rows}
 
 
 @app.post("/api/ask")
@@ -517,6 +602,15 @@ def _stub_answer(question: str, error: str = "") -> dict:
 # the React/TS build (web/static-react, produced by `npm run build`); _REACT is
 # defined near the top so /health can share it.
 if (_REACT / "index.html").exists():
+    from fastapi.responses import FileResponse
+
+    # SPA client routes: serve index.html so a direct load / refresh of
+    # /login or /connections hands control to the React router (App.tsx).
+    @app.get("/login")
+    @app.get("/connections")
+    def _spa_routes():
+        return FileResponse(str(_REACT / "index.html"))
+
     app.mount("/", StaticFiles(directory=str(_REACT), html=True), name="static")
 else:  # no build present — API still serves; surface a clear hint at root
     @app.get("/")

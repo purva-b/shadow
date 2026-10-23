@@ -39,6 +39,15 @@ SECRET_KEYS = (
     # OAuth seam (unused until the OAuth login flow lands):
     "BOX_OAUTH_CLIENT_ID",
     "BOX_OAUTH_CLIENT_SECRET",
+    # per-connector OAuth apps (dormant until each is registered + set):
+    "SLACK_OAUTH_CLIENT_ID",
+    "SLACK_OAUTH_CLIENT_SECRET",
+    "GITHUB_OAUTH_CLIENT_ID",
+    "GITHUB_OAUTH_CLIENT_SECRET",
+    "ATLASSIAN_OAUTH_CLIENT_ID",
+    "ATLASSIAN_OAUTH_CLIENT_SECRET",
+    "GOOGLE_OAUTH_CLIENT_ID",
+    "GOOGLE_OAUTH_CLIENT_SECRET",
 )
 
 

@@ -117,3 +117,40 @@ def list_for(user_id: str) -> dict[str, dict]:
 def connected(user_id: str, connector: str) -> bool:
     tok = get(user_id, connector)
     return bool(tok and tok.get("access_token"))
+
+
+def refresh(user_id: str, connector: str, token_url: str,
+            client_id: str, client_secret: str) -> dict | None:
+    """Exchange this user's stored refresh_token for a new access token and
+    persist it. Returns the refreshed token dict, or None when there is no
+    refresh_token or the exchange fails (caller then re-prompts the user to
+    reconnect). Kept here so every connector refreshes the same way."""
+    tok = get(user_id, connector)
+    if not tok or not tok.get("refresh_token"):
+        return None
+    try:
+        import requests
+
+        r = requests.post(token_url, data={
+            "grant_type": "refresh_token",
+            "refresh_token": tok["refresh_token"],
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }, headers={"Accept": "application/json"}, timeout=15)
+        if r.status_code != 200:
+            return None
+        payload = r.json()
+        new_access = payload.get("access_token")
+        if not new_access:
+            return None
+        merged = {
+            **tok,
+            "access_token": new_access,
+            # some providers rotate the refresh token; keep the old one if not
+            "refresh_token": payload.get("refresh_token") or tok["refresh_token"],
+            "scope": payload.get("scope", tok.get("scope", "")),
+        }
+        save(user_id, connector, merged)
+        return merged
+    except Exception:
+        return None

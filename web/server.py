@@ -67,9 +67,9 @@ def _subtitle_for(name: str) -> str:
         return _SUBTITLE_CACHE[name]
     sub = ""
     try:
-        from agents.answer import _people_cards
+        from core.structured import people_cards
 
-        for c in _people_cards():
+        for c in people_cards():
             if c.get("name") == name:
                 role = c.get("role", "")
                 team = c.get("team", "")
@@ -106,6 +106,13 @@ try:
     app.include_router(_conn_oauth_router)
 except Exception as _e:  # per-connector OAuth is optional too
     print(f"[server] connector-OAuth router not mounted: {_e}", flush=True)
+
+try:
+    from core.notify_senders import install as _install_sender
+
+    print(f"[server] notification sender: {_install_sender()}", flush=True)
+except Exception as _e:  # delivery is best-effort; detection still records locally
+    print(f"[server] notification sender not installed: {_e}", flush=True)
 
 # the React/TS build dir (web/static-react, produced by `npm run build`).
 # Defined up here so /health and the static mount below share one constant.

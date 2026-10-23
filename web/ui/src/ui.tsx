@@ -27,6 +27,37 @@ export function ShadowMark({ size = 34 }: { size?: number }) {
   );
 }
 
+/**
+ * The Shadow ghost mark — a rounded white ghost with a wavy hem and two
+ * eye-slits, dark outline, wrapped in a spinning rainbow halo. Pure SVG so it
+ * scales from a 20px favicon to a 56px launcher. The halo spins and the ghost
+ * blinks via CSS classes (.gm-halo / .gm-eye) defined in app.css; both honour
+ * prefers-reduced-motion. `glow` renders the halo (used in the launcher and the
+ * header); omit it for a flat inline mark (e.g. a message avatar).
+ */
+export function GhostMark({ size = 34, glow = true, think = false }:
+  { size?: number; glow?: boolean; think?: boolean }) {
+  const body = (
+    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true"
+      className={"gm-ghost" + (think ? " think" : "")}>
+      <path
+        d="M22 80 Q31 72 40 80 T58 80 T78 80 L78 46 Q78 20 50 20 Q22 20 22 46 Z"
+        fill="#fff" stroke="#0E1120" strokeWidth="5" strokeLinejoin="round" />
+      <g fill="#0E1120">
+        <rect className="gm-eye" x="39" y="43" width="6.5" height="15" rx="3.2" />
+        <rect className="gm-eye" x="54" y="43" width="6.5" height="15" rx="3.2" />
+      </g>
+    </svg>
+  );
+  if (!glow) return body;
+  return (
+    <span className="gm-stage" style={{ width: size, height: size }}>
+      <span className="gm-halo" />
+      <span className="gm-wrap">{body}</span>
+    </span>
+  );
+}
+
 export function Icon({ d, sm }: { d: string; sm?: boolean }) {
   return (
     <svg className={"icon" + (sm ? " sm" : "")} viewBox="0 0 24 24" aria-hidden="true"
@@ -46,6 +77,11 @@ export const ICONS = {
   github: '<path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 0 0-1-2.6c3-.3 6-1.5 6-6.6a5 5 0 0 0-1.4-3.5 4.6 4.6 0 0 0-.1-3.5s-1.1-.3-3.5 1.3a12 12 0 0 0-6 0C6.1 1.6 5 1.9 5 1.9a4.6 4.6 0 0 0-.1 3.5A5 5 0 0 0 3.5 9c0 5 3 6.3 6 6.6a3.4 3.4 0 0 0-1 2.6V22"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  minimize: '<line x1="6" y1="12" x2="18" y2="12"/>',
+  back: '<line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>',
+  chevron: '<polyline points="9 18 15 12 9 6"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  plug: '<path d="M9 2v6"/><path d="M15 2v6"/><path d="M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/>',
   send: '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>',
   people: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="8" r="2.5"/>',
   folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',

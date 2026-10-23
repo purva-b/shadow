@@ -161,18 +161,65 @@ shadow/
     calendar_connector.py
   core/
     ingest.py          # Scribe/Librarian/Cartographer on SourceRecord
-    retrieve.py        # semantic + exact recall, ACL filter
-    answer.py          # Strands answer agent (unchanged contract)
+    retrieve.py        # semantic + exact recall, ACL filter (DB-side when pgvector)
+    structured.py      # people cards, org chart, decisions, who-to-ask (owner-ranked)
+    answer_connectors.py  # source-agnostic answer path over the store
+    agent_answer.py    # optional Strands agent orchestration
     identity.py        # handle → canonical principal
     acl.py             # Acl model + "can this principal read" check
-  web/                 # FastAPI + React (unchanged surface)
+    store.py           # StoreBackend facade: jsonl (default) | pgvector
+    config.py          # secrets resolution: env → Secrets Manager → .env
+    token_store.py     # per-(user, connector) OAuth tokens (DynamoDB | local)
+    llm.py             # Strands/Bedrock model layer
+  web/
+    server.py          # FastAPI: /api/*, /auth/*, /connect/*, SPA routes
+    auth.py            # signed session cookie (identity is NEVER client-asserted)
+    oauth.py           # Box OAuth 2.0 user login (/auth/login, /auth/callback)
+    connector_oauth.py # per-connector OAuth (Slack, GitHub, Confluence, Calendar)
+    ui/                # React/TS SPA: chat popup, LoginPage, ConnectionsPage
   config/
-    workspace.yaml     # components, connectors enabled, identity map
+    workspace.yaml     # components, connectors enabled, identity map, taxonomy
 ```
 
 ---
 
-## 8. Migration path (incremental, each step shippable)
+## 9. Web surface: identity, login, and connecting sources
+
+Shadow is a floating **chat popup** plus two full pages, all served by the one
+FastAPI app from the built React SPA.
+
+**Identity is always a signed session cookie — never the request body.**
+`web/auth.py` HMAC-signs the user id into `shadow_session`; every request reads
+identity through `current_user_id` / `require_user_id`, so a caller cannot
+impersonate anyone by passing a `user_id`. A tampered cookie fails the
+`compare_digest` check and is treated as logged out.
+
+**User login = Box OAuth** (`web/oauth.py`). `/auth/login` → Box authorize (with
+a signed anti-CSRF `state`) → `/auth/callback` verifies state, exchanges the
+code for a token, reads `/users/me` to learn who you are, then mints the signed
+cookie. Box authenticates; Shadow only authorizes. The flow is dormant until a
+Box OAuth app is configured (`BOX_OAUTH_CLIENT_ID`); until then a dev login mints
+the same cookie, so every downstream reader is identical in both modes.
+
+**Connecting sources = per-connector OAuth** (`web/connector_oauth.py`). A
+signed-in user connects Slack / GitHub / Confluence / Calendar through the same
+three-legged dance; the grant is THEIRS, so the token is stored per
+`(user_id, connector)` in `core/token_store.py` and a later sync for that user
+reads that user's own token — seeing only what that user can see. Each provider
+is inert until its OAuth app is registered and its creds set; the `/connections`
+page shows a real **Connect** button when configured, else **setup steps**. No
+fake buttons: an unconfigured sync returns `reason:"not_configured"` rather than
+a hollow success.
+
+```
+/login        → Sign in with Box (OAuth)         → mints shadow_session
+/connections  → connect/sync each source         → /connect/<name> OAuth
+/             → the floating chat popup           → /api/ask (ACL-filtered)
+```
+
+---
+
+## 10. Migration path (incremental, each step shippable)
 
 1. **Extract `SourceRecord` + `Connector` interface** (`connectors/base.py`).
 2. **Wrap today's Box flow as `box_connector.py`** — no behavior change, proves

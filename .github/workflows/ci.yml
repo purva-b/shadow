@@ -57,3 +57,27 @@ jobs:
 
       - name: Agent-path smoke (strands/bedrock import + wiring)
         run: pytest tests/test_agent_path.py -v
+
+  # Frontend lane: the React SPA (chat popup, login page, connections page).
+  # Vitest + Testing Library, jsdom — no browser or server needed.
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install UI deps
+        working-directory: web/ui
+        run: npm install
+
+      - name: Unit tests (vitest)
+        working-directory: web/ui
+        run: npm test
+
+      - name: Type-check + build
+        working-directory: web/ui
+        run: npm run build

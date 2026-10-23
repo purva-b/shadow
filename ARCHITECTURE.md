@@ -8,6 +8,17 @@ This document describes how Shadow moves from a Box-only demo to a **fully
 functional project with pluggable connectors** (Slack, Confluence, Calendars,
 GitHub, …).
 
+## Architecture at a glance
+
+![Shadow architecture — ingest fills one store; a question reads it, filters by your Box permissions, and answers](docs/diagrams/architecture.svg)
+
+Two flows share one **store**: **ingest** normalizes every source into one
+`SourceRecord` and fills the store; a **question** retrieves candidates, drops
+everything your Box permissions withhold (a live `can_read` probe — the red
+edge), composes a cited answer, and returns it. **Box** owns truth + permissions;
+**AWS** (Bedrock, Titan, pgvector, DynamoDB, Secrets Manager) does reasoning +
+scale, each with a working fallback so the app runs with only Box configured.
+
 ---
 
 ## 1. The core idea that makes plugins possible

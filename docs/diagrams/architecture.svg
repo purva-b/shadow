@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600" font-family="Inter, system-ui, Arial, sans-serif" role="img" aria-label="Shadow architecture">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="10" refX="7.5" refY="3" orient="auto"><path d="M0,0 L7.5,3 L0,6 Z" fill="#9096AA"/></marker>
+    <marker id="arR" markerWidth="10" markerHeight="10" refX="7.5" refY="3" orient="auto"><path d="M0,0 L7.5,3 L0,6 Z" fill="#D23B47"/></marker>
+    <linearGradient id="gBox" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#20222C"/><stop offset="1" stop-color="#14161F"/></linearGradient>
+  </defs>
+  <rect x="0" y="0" width="900" height="600" fill="#ffffff"/>
+  <text x="24" y="34" font-size="18" font-weight="700" fill="#14161F">Shadow — how the pieces work together</text>
+  <text x="24" y="54" font-size="12" fill="#858BA0">Two flows share one store. Ingest fills it from every source; a question reads it, filters by your Box permissions, and answers.</text>
+
+  <!-- swimlanes -->
+  <rect x="12" y="68" width="876" height="128" rx="14" fill="#FEF7F2" stroke="#F3E2D6"/>
+  <text x="28" y="90" font-size="11" font-weight="700" fill="#B4530B" letter-spacing=".04em">INGEST  ·  fill the store from every source</text>
+  <rect x="12" y="210" width="876" height="214" rx="14" fill="#F7F9FC" stroke="#E6EAF2"/>
+  <text x="28" y="232" font-size="11" font-weight="700" fill="#4F46E5" letter-spacing=".04em">ASK  ·  answer one question, within your permissions</text>
+  <rect x="12" y="438" width="876" height="150" rx="14" fill="#FAFAFC" stroke="#EAECF3"/>
+  <text x="28" y="460" font-size="11" font-weight="700" fill="#858BA0" letter-spacing=".04em">EXTERNAL SYSTEMS  ·  Box owns truth + permissions · AWS reasons + scales</text>
+
+  <!-- ingest -->
+  <rect x="28" y="102" width="150" height="80" rx="10" fill="#fff" stroke="#E2E4EC"/>
+  <circle cx="40" cy="114" r="4" fill="#0F7A43"/>
+  <text x="103" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#14161F">5 Sources</text>
+  <text x="103" y="142" text-anchor="middle" font-size="9.5" fill="#444B5E">Box · GitHub · Slack</text>
+  <text x="103" y="155" text-anchor="middle" font-size="9.5" fill="#444B5E">Confluence · Calendar</text>
+  <text x="103" y="173" text-anchor="middle" font-size="8.5" fill="#858BA0">connectors/*</text>
+  <rect x="206" y="102" width="150" height="80" rx="10" fill="#fff" stroke="#E2E4EC"/>
+  <circle cx="218" cy="114" r="4" fill="#0F7A43"/>
+  <text x="281" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#14161F">Normalize</text>
+  <text x="281" y="142" text-anchor="middle" font-size="9.5" fill="#444B5E">one SourceRecord</text>
+  <text x="281" y="155" text-anchor="middle" font-size="9.5" fill="#444B5E">discover·fetch·acl</text>
+  <text x="281" y="173" text-anchor="middle" font-size="8.5" fill="#858BA0">connectors/base</text>
+  <rect x="384" y="102" width="160" height="80" rx="10" fill="#fff" stroke="#E2E4EC"/>
+  <circle cx="396" cy="114" r="4" fill="#EAB308"/>
+  <text x="464" y="124" text-anchor="middle" font-size="11" font-weight="700" fill="#14161F">Enrich + embed</text>
+  <text x="464" y="142" text-anchor="middle" font-size="9.5" fill="#444B5E">Bedrock fields · Titan vec</text>
+  <text x="464" y="155" text-anchor="middle" font-size="9.5" fill="#444B5E">core/ingest · embeddings</text>
+  <text x="464" y="173" text-anchor="middle" font-size="8.5" fill="#858BA0">degrades w/o AWS</text>
+  <line x1="178" y1="142" x2="204" y2="142" stroke="#9096AA" stroke-width="1.6" marker-end="url(#ar)"/>
+  <line x1="356" y1="142" x2="382" y2="142" stroke="#9096AA" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <!-- store -->
+  <rect x="600" y="102" width="262" height="80" rx="10" fill="#E0F5F4" stroke="#9fdedd"/>
+  <circle cx="612" cy="114" r="4" fill="#0F7A43"/>
+  <text x="731" y="124" text-anchor="middle" font-size="12" font-weight="700" fill="#0B8687">STORE  (one index)</text>
+  <text x="731" y="143" text-anchor="middle" font-size="9.5" fill="#0B8687">jsonl default  ·  pgvector scale</text>
+  <text x="731" y="158" text-anchor="middle" font-size="9.5" fill="#0B8687">259 Box + 3 GitHub records</text>
+  <text x="731" y="174" text-anchor="middle" font-size="8.5" fill="#5a9a99">core/store.py</text>
+  <line x1="544" y1="142" x2="598" y2="142" stroke="#9096AA" stroke-width="1.6" marker-end="url(#ar)"/>
+
+  <!-- ask -->
+  <rect x="28" y="290" width="138" height="104" rx="10" fill="#fff" stroke="#E2E4EC"/>
+  <circle cx="40" cy="302" r="4" fill="#0F7A43"/>
+  <text x="97" y="316" text-anchor="middle" font-size="11" font-weight="700" fill="#14161F">Chat popup</text>
+  <text x="97" y="335" text-anchor="middle" font-size="9.5" fill="#444B5E">you ask, signed in</text>
+  <text x="97" y="350" text-anchor="middle" font-size="9.5" fill="#444B5E">identity = cookie,</text>
+  <text x="97" y="363" text-anchor="middle" font-size="9.5" fill="#444B5E">never the body</text>
+  <text x="97" y="382" text-anchor="middle" font-size="8.5" fill="#858BA0">web/ui · auth.py</text>
+  <rect x="194" y="290" width="138" height="104" rx="10" fill="#fff" stroke="#E2E4EC"/>
+  <circle cx="206" cy="302" r="4" fill="#EAB308"/>
+  <text x="263" y="316" text-anchor="middle" font-size="11" font-weight="700" fill="#14161F">Retrieve</text>
+  <text x="263" y="335" text-anchor="middle" font-size="9.5" fill="#444B5E">top candidates</text>
+  <text x="263" y="350" text-anchor="middle" font-size="9.5" fill="#444B5E">semantic + exact</text>
+  <text x="263" y="369" text-anchor="middle" font-size="8.5" fill="#858BA0">core/retrieve.py</text>
+  <rect x="360" y="290" width="150" height="104" rx="10" fill="#FCE9EA" stroke="#f3b6bb"/>
+  <circle cx="372" cy="302" r="4" fill="#0F7A43"/>
+  <text x="435" y="314" text-anchor="middle" font-size="11" font-weight="700" fill="#D23B47">ACL filter</text>
+  <text x="435" y="333" text-anchor="middle" font-size="9.5" fill="#D23B47">drop what you</text>
+  <text x="435" y="347" text-anchor="middle" font-size="9.5" fill="#D23B47">can't read —</text>
+  <text x="435" y="361" text-anchor="middle" font-size="9.5" fill="#D23B47">live Box probe</text>
+  <text x="435" y="380" text-anchor="middle" font-size="8.5" fill="#b06a71">core/acl · wiring</text>
+  <rect x="538" y="290" width="150" height="104" rx="10" fill="#ECEBFE" stroke="#C7C4F7"/>
+  <circle cx="550" cy="302" r="4" fill="#EAB308"/>
+  <text x="613" y="314" text-anchor="middle" font-size="11" font-weight="700" fill="#4F46E5">Compose</text>
+  <text x="613" y="333" text-anchor="middle" font-size="9.5" fill="#4F46E5">Claude (→ heuristic)</text>
+  <text x="613" y="347" text-anchor="middle" font-size="9.5" fill="#4F46E5">who-to-ask by owner</text>
+  <text x="613" y="361" text-anchor="middle" font-size="9.5" fill="#4F46E5">decision status</text>
+  <text x="613" y="380" text-anchor="middle" font-size="8.5" fill="#8582c4">core/llm · structured</text>
+  <rect x="716" y="290" width="146" height="104" rx="10" fill="#E4F6EC" stroke="#aedcc0"/>
+  <circle cx="728" cy="302" r="4" fill="#0F7A43"/>
+  <text x="789" y="314" text-anchor="middle" font-size="11" font-weight="700" fill="#0F7A43">Answer</text>
+  <text x="789" y="333" text-anchor="middle" font-size="9.5" fill="#0F7A43">cited prose</text>
+  <text x="789" y="347" text-anchor="middle" font-size="9.5" fill="#0F7A43">who-to-ask</text>
+  <text x="789" y="361" text-anchor="middle" font-size="9.5" fill="#0F7A43">"1 withheld"</text>
+  <text x="789" y="380" text-anchor="middle" font-size="8.5" fill="#5a9a7f">back to popup</text>
+  <line x1="166" y1="342" x2="192" y2="342" stroke="#9096AA" stroke-width="1.8" marker-end="url(#ar)"/>
+  <line x1="332" y1="342" x2="358" y2="342" stroke="#9096AA" stroke-width="1.8" marker-end="url(#ar)"/>
+  <line x1="510" y1="342" x2="536" y2="342" stroke="#9096AA" stroke-width="1.8" marker-end="url(#ar)"/>
+  <line x1="688" y1="342" x2="714" y2="342" stroke="#9096AA" stroke-width="1.8" marker-end="url(#ar)"/>
+  <line x1="263" y1="290" x2="263" y2="186" stroke="#9096AA" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#ar)"/>
+  <text x="300" y="250" font-size="8.5" fill="#858BA0">reads store</text>
+
+  <!-- external -->
+  <rect x="28" y="482" width="250" height="92" rx="11" fill="url(#gBox)"/>
+  <circle cx="40" cy="494" r="4" fill="#0F7A43"/>
+  <text x="153" y="506" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">Box — truth + permissions</text>
+  <text x="153" y="525" text-anchor="middle" font-size="9.5" fill="#C7CBD9">files + metadata = the memory</text>
+  <text x="153" y="539" text-anchor="middle" font-size="9.5" fill="#C7CBD9">collaborations = the ACL</text>
+  <text x="153" y="556" text-anchor="middle" font-size="9.5" fill="#8CE0C8">can_read probe → 403 = withheld</text>
+  <line x1="435" y1="394" x2="250" y2="480" stroke="#D23B47" stroke-width="1.7" marker-end="url(#arR)"/>
+  <text x="300" y="446" font-size="9" fill="#D23B47" font-weight="600">live can_read</text>
+  <rect x="300" y="482" width="300" height="92" rx="11" fill="#FFF7EC" stroke="#F0D9AE"/>
+  <circle cx="312" cy="494" r="4" fill="#EAB308"/>
+  <text x="450" y="506" text-anchor="middle" font-size="12" font-weight="700" fill="#B4530B">AWS — reasoning + scale</text>
+  <text x="450" y="525" text-anchor="middle" font-size="9.5" fill="#8a6220">Bedrock Claude · Titan embeds</text>
+  <text x="450" y="539" text-anchor="middle" font-size="9.5" fill="#8a6220">pgvector · DynamoDB · Secrets Mgr</text>
+  <text x="450" y="556" text-anchor="middle" font-size="9.5" fill="#8a6220">each has a working fallback</text>
+  <line x1="464" y1="182" x2="450" y2="480" stroke="#9096AA" stroke-width="1.3" stroke-dasharray="5 3" marker-end="url(#ar)"/>
+  <rect x="622" y="482" width="240" height="92" rx="11" fill="#FAFAFC" stroke="#E2E4EC"/>
+  <circle cx="634" cy="494" r="4" fill="#9aa0b0"/>
+  <text x="742" y="506" text-anchor="middle" font-size="11.5" font-weight="700" fill="#14161F">Auth (redirect pages)</text>
+  <text x="742" y="525" text-anchor="middle" font-size="9.5" fill="#444B5E">/login → Box OAuth</text>
+  <text x="742" y="539" text-anchor="middle" font-size="9.5" fill="#444B5E">/connections → per-connector OAuth</text>
+  <text x="742" y="556" text-anchor="middle" font-size="9.5" fill="#444B5E">tokens per (user, connector)</text>
+  <line x1="742" y1="482" x2="120" y2="396" stroke="#9096AA" stroke-width="1.2" stroke-dasharray="4 4" marker-end="url(#ar)"/>
+  <text x="430" y="420" font-size="8.5" fill="#858BA0">mints session cookie</text>
+
+  <!-- legend -->
+  <g font-size="10.5" fill="#444B5E">
+    <circle cx="590" cy="592" r="5" fill="#0F7A43"/><text x="600" y="596">Live</text>
+    <circle cx="648" cy="592" r="5" fill="#EAB308"/><text x="658" y="596">Degraded (AWS fallback)</text>
+    <circle cx="806" cy="592" r="5" fill="#9aa0b0"/><text x="816" y="596">Dormant</text>
+  </g>
+</svg>
